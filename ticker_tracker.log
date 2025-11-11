@@ -1,0 +1,56 @@
+2025-11-11 12:40:50,554 - __main__ - INFO - Starting ticker mention scan
+2025-11-11 12:40:50,554 - __main__ - ERROR - Error during scan: Reddit client_id and client_secret must be provided
+Traceback (most recent call last):
+  File "/Users/ethanmatthews/Programming/ticker_tracker/src/app.py", line 37, in run_scan
+    reddit = RedditClient(
+             ^^^^^^^^^^^^^
+  File "/Users/ethanmatthews/Programming/ticker_tracker/src/reddit/RedditClient.py", line 9, in __init__
+    raise ValueError("Reddit client_id and client_secret must be provided")
+ValueError: Reddit client_id and client_secret must be provided
+2025-11-11 12:40:50,555 - __main__ - ERROR - Fatal error: Reddit client_id and client_secret must be provided
+Traceback (most recent call last):
+  File "/Users/ethanmatthews/Programming/ticker_tracker/src/app.py", line 86, in <module>
+    counts = run_scan()
+             ^^^^^^^^^^
+  File "/Users/ethanmatthews/Programming/ticker_tracker/src/app.py", line 37, in run_scan
+    reddit = RedditClient(
+             ^^^^^^^^^^^^^
+  File "/Users/ethanmatthews/Programming/ticker_tracker/src/reddit/RedditClient.py", line 9, in __init__
+    raise ValueError("Reddit client_id and client_secret must be provided")
+ValueError: Reddit client_id and client_secret must be provided
+2025-11-11 12:48:06,980 - __main__ - INFO - Starting ticker mention scan
+2025-11-11 12:48:06,980 - __main__ - ERROR - Error during scan: Reddit client_id and client_secret must be provided
+Traceback (most recent call last):
+  File "/Users/ethanmatthews/Programming/ticker_tracker/src/app.py", line 37, in run_scan
+    reddit = RedditClient(
+        config.REDDIT_CLIENT_ID,
+        config.REDDIT_CLIENT_SECRET,
+        config.REDDIT_USER_AGENT
+    )
+  File "/Users/ethanmatthews/Programming/ticker_tracker/src/reddit/RedditClient.py", line 9, in __init__
+    raise ValueError("Reddit client_id and client_secret must be provided")
+ValueError: Reddit client_id and client_secret must be provided
+2025-11-11 12:48:06,982 - __main__ - ERROR - Fatal error: Reddit client_id and client_secret must be provided
+Traceback (most recent call last):
+  File "/Users/ethanmatthews/Programming/ticker_tracker/src/app.py", line 86, in <module>
+    counts = run_scan()
+  File "/Users/ethanmatthews/Programming/ticker_tracker/src/app.py", line 37, in run_scan
+    reddit = RedditClient(
+        config.REDDIT_CLIENT_ID,
+        config.REDDIT_CLIENT_SECRET,
+        config.REDDIT_USER_AGENT
+    )
+  File "/Users/ethanmatthews/Programming/ticker_tracker/src/reddit/RedditClient.py", line 9, in __init__
+    raise ValueError("Reddit client_id and client_secret must be provided")
+ValueError: Reddit client_id and client_secret must be provided
+2025-11-11 12:50:25,164 - __main__ - INFO - Starting ticker mention scan
+2025-11-11 12:50:25,619 - src.reddit.RedditClient - INFO - Reddit client initialized
+2025-11-11 12:50:25,624 - src.reddit.RedditClient - INFO - Fetching 30 recent posts from r/wallstreetbets
+2025-11-11 12:51:08,469 - src.storage.Database - INFO - Inserted 4 mention count records
+2025-11-11 12:51:08,469 - __main__ - INFO - Scan complete. Found mentions: {'NVDA': 61, 'TSLA': 5, 'AAPL': 1, 'MSFT': 6}
+2025-11-11 12:51:17,462 - __main__ - INFO - Processed 4404 new posts/comments
+2025-11-11 12:52:49,777 - __main__ - INFO - Starting ticker mention scan
+2025-11-11 12:52:49,779 - src.reddit.RedditClient - INFO - Reddit client initialized
+2025-11-11 12:52:49,783 - src.reddit.RedditClient - INFO - Fetching 30 recent posts from r/wallstreetbets
+2025-11-11 12:53:33,690 - __main__ - INFO - Scan complete. No mentions found.
+2025-11-11 12:53:33,964 - __main__ - INFO - Processed 24 new posts/comments
