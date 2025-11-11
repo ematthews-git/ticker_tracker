@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import datetime
 
-def insert_mention_counts(self, counts):
+def insert_mention_counts(DB_PATH, counts):
     """Adds each ticker in counts to the database with a timestamp
 
     Args:
@@ -9,7 +9,7 @@ def insert_mention_counts(self, counts):
     """
     timestamp = datetime.utcnow().isoformat()
 
-    conn = sqlite3.connect("data.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     for ticker, count in counts:

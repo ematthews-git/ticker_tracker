@@ -1,14 +1,12 @@
 import sqlite3
 import os
-from dotenv import load_dotenv
+from config import DB_PATH
 
-load_dotenv()
-
-DB_PATH = os.getenv("DATABASE_PATH")
 print(DB_PATH)
 
 def create_database():
-    """Creates a database and table for mentions
+    """Creates database with:
+    mentions table and posts table
     """
     #TODO: check path is valid
 
@@ -21,6 +19,15 @@ def create_database():
                    timestamp DATETIME NOT NULL,
                    mention_count INTEGER NOT NULL,
                    PRIMARY KEY (ticker, timestamp)
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS posts (
+                   post_id TEXT PRIMARY KEY,
+                   created_utc DATETIME NOT NULL,
+                   text TEXT NOT NULL,
+                   type TEXT NOT NULL
         );
     """)
 
