@@ -19,12 +19,15 @@ class RedditClient:
             -"type" (str): "post" or "comment"
             -"text" (str): the post or comment's text
         """
-        sub = self.reddit.subreddit(subreddit)
-        for post in sub.new(limit=limit):
-            yield {"type":"post", "text": post.title + ' ' + (post.selftext or '')}
-            #get comments
-            post.comments.replace_more(limit=0)
-            for c in post.comments.list():
-                yield {"type": "comment", "text": c.body}
+        try:
+            sub = self.reddit.subreddit(subreddit)
+            for post in sub.new(limit=limit):
+                yield {"type":"post", "text": post.title + ' ' + (post.selftext or '')}
+                #get comments
+                post.comments.replace_more(limit=0)
+                for c in post.comments.list():
+                    yield {"type": "comment", "text": c.body}
+        except:
+            print("Error connecting with subreddit. redditclient.py")
     
     
