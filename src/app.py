@@ -4,6 +4,8 @@ from storage.Database import Database
 from dotenv import load_dotenv
 import os
 
+load_dotenv()
+
 VALID = ['AAPL', 'TSLA', 'MSFT', 'NVDA']
 
 client_id = os.getenv("REDDIT_CLIENT_ID")

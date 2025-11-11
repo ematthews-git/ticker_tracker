@@ -1,27 +1,19 @@
 import sqlite3
 from datetime import datetime
 
-class Database:
-    """The database holding each ticker, count value pair
+def insert_mention_counts(self, counts):
+    """Adds each ticker in counts to the database with a timestamp
 
-    SQLite database which holds entries per timestamp. 
-    EX: "TSLA", "2025-11-11 12:00:00", "300"
-        "TSLA", "2025-11-11 13:00:00", "200"
+    Args:
+        counts (dict[str, int]): A dictionary holding a ticker and count value pair
     """
-    def __init__(self, db_path="data.db"):
-        self.connection = sqlite3.connect(db_path)
-        self.connection.execute("CREATE TABLE IF NOT EXISTS mentions (ticker TEXT, timestamp TEXT, mentions INTEGER)")
-    
-    def insert_mention_counts(self, counts):
-        """Adds each ticker in counts to the database with a timestamp
+    timestamp = datetime.utcnow().isoformat()
 
-        Args:
-            counts (dict[str, int]): A dictionary holding a ticker and count value pair
-        """
-        timestamp = datetime.utcnow().isoformat()
-        for ticker, value in counts.items():
-            self.connection.execute(
-                "INSERT INTO mentions values (?,?,?)", 
-                (ticker, timestamp, value)
-            )
-        self.connection.commit()
+    conn = sqlite3.connect("data.db")
+    cursor = conn.cursor()
+
+    for ticker, count in counts:
+        cursor.execute("""
+            INSERT OR IGNORE INTO mentions (ticker, timestamp, mention_count)
+            VALUES (?, ?, ?);
+        """, (ticker.upper(), timestamp, count))
