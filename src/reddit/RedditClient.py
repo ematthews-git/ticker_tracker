@@ -1,4 +1,5 @@
 import praw 
+from models import Post
 
 class RedditClient:
     """Establishes a connection with the reddit api and communicates with the reddit API.
@@ -12,25 +13,21 @@ class RedditClient:
         """Yields recent posts and comments from subreddit
 
         Args:
-            subreddit (str): Name of subreddit (without r/)
+            subreddit (str): Name of subreddit (without r/).
             limit (int, optional): Max number of posts to be retrieved. does not affect comments. Defaults to 200.
 
         Yields:
-            Dict[str, str, str, float]: A dictionary containing the following keys:
-            - "id" (str): The id of the post (abc123)
-            - "type" (str): "post" or "comment"
-            - "text" (str): the post or comment's text
-            - "created" (float): the created_utc time of post in UNIX
+            Post: a post dataclass instance representing an entry from the subreddit.
         """
         try:
             sub = self.reddit.subreddit(subreddit)
-            for post in sub.new(limit=limit):
-                yield {"id": post.id, "type":"post", "text": post.title + ' ' + (post.selftext or ''), "created": post.created_utc}
+            for p in sub.new(limit=limit):
+                yield Post(p.id, "post", p. title + ' ' + (p.selftext or ''), p.created_utc)
                 #get comments
-                post.comments.replace_more(limit=0)
-                for c in post.comments.list():
-                    yield {"id": c.id, "type": "comment", "text": c.body, "created": c.created_utc}
-        except:
-            print("Error connecting with subreddit. redditclient.py")
+                p.comments.replace_more(limit=0)
+                for c in p.comments.list():
+                    yield Post(c.id, "comment", c.body, c.created_utc)
+        except Exception as e:
+            print(f"Error connecting with subreddit '{subreddit}': {e}")
     
     
