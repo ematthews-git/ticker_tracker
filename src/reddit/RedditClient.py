@@ -5,7 +5,6 @@ class RedditClient:
     """Establishes a connection with the reddit api and communicates with the reddit API.
     """
     def __init__(self, client_id, client_secret, user_agent):
-        
         self.reddit = praw.Reddit(client_id=client_id, client_secret=client_secret,
                                   user_agent = user_agent)
     
@@ -22,11 +21,11 @@ class RedditClient:
         try:
             sub = self.reddit.subreddit(subreddit)
             for p in sub.new(limit=limit):
-                yield Post(p.id, "post", p. title + ' ' + (p.selftext or ''), p.created_utc)
+                yield Post(p.id, subreddit, "post", p. title + ' ' + (p.selftext or ''), p.created_utc)
                 #get comments
                 p.comments.replace_more(limit=0)
                 for c in p.comments.list():
-                    yield Post(c.id, "comment", c.body, c.created_utc)
+                    yield Post(c.id, subreddit, "comment", c.body, c.created_utc)
         except Exception as e:
             print(f"Error connecting with subreddit '{subreddit}': {e}")
     
