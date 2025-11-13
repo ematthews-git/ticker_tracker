@@ -28,23 +28,22 @@ class TickerMentionScanner:
         conn.close()
     
     #Counts mentions of valid tickers into dictionary from a list of text
-    def count_mentions(self, post_list: list[Post]) -> dict[str, int]:
-        """finds the mention of any valid ticker in the list of text parsed
+    def process_mentions(self, post_list: list[Post]) -> dict[str, int]:
+        """finds the mention of any valid ticker in the list of text parsed and saves each post to db.
 
         Args:
-            post_list (Iterable[Post]): The list of post items to search
+            post_list (Iterable[Post]): The list of post items to search.
 
         Returns:
-            dict[str, int]: A dictionary mapping each ticker symbol to the number of times it was mentioned
+            dict[str, int]: A dictionary mapping each ticker symbol to the number of times it was mentioned.
         """
         counts = {}
 
         for post in post_list:
             self.save_post(post)
-
-        # for text in text_list:
-        #     words = re.findall(r'\b[A-Z]{2,5}\b', text) #capital letters + 2 to 5 characters
-        #     for w in words:
-        #         if w not in self.invalid:
-        #             counts[w] = counts.get(w, 0) + 1 #existing val += 1
-        # return counts
+            #find ticker mentions
+            tickers = re.findall(r'\b[A-Z]{2, 5}\b', post.text) #captal letters + 2 to 5 characters
+            for t in tickers:
+                if t not in self.invalid:
+                    counts[t] = counts.get(t, 0) + 1 #existing val += 1
+            return counts
