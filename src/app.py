@@ -1,3 +1,9 @@
+import sys
+from pathlib import Path
+
+# Add src directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+
 from reddit.RedditClient import RedditClient
 from reddit.TickerMentionScanner import TickerMentionScanner
 from config import CLIENT_ID, CLIENT_SECRET, USER_AGENT, INVALID, DB_PATH, SUBREDDITS

@@ -1,5 +1,11 @@
 import re
 import sqlite3
+import sys
+from pathlib import Path
+
+# Add parent directory to path to import config and models
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from config import DB_PATH
 from models import Post
 
