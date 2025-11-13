@@ -45,8 +45,21 @@ class TickerMentionScanner:
         """
         counts = {}
 
+        #get existing posts to avoid double counting
+        existing_ids = set()
+        existing_ids = self._get_existing_posts_ids()
+        print(f"Found {len(existing_ids)} existing posts in database")
+
+        new_posts = 0
+
         for post in post_list:
+            #skip if already processed
+            if post.id in existing_ids:
+                continue
+
             self.save_post(post)
+            new_posts += 1
+            
             #find ticker mentions
             tickers = re.findall(r'\b[A-Z]{2,5}\b', post.text) #captal letters + 2 to 5 characters
             for t in tickers:
@@ -55,3 +68,17 @@ class TickerMentionScanner:
                     counts[key] = counts.get(key, 0) + 1 #existing val += 1
 
         return counts
+
+    def _get_existing_posts_ids(self) -> set:
+        """Gets set of all post IDs already in the database
+        Returns:
+            set: all post IDs
+        """
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT post_id FROM posts")
+        existing_ids = {row[0] for row in cursor.fetchall()}
+
+        conn.close()
+        return existing_ids
