@@ -6,7 +6,6 @@ class Post:
     """Represents a reddit post or comment
 
     Attributes:
-    Attributes:
         id (str): The unique Reddit post or comment ID (e.g., 'abc123').
         type (Literal["post", "comment"]): Indicates whether the entry is a post or comment.
         text (str): The combined title and body (or comment text).
