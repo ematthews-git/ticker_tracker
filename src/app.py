@@ -19,7 +19,7 @@ def collect_data():
 
         #fetch posts from each subreddit
         for subreddit in SUBREDDITS:
-            print("Fetching posts from r/pennystocks...")
+            print(f"Fetching posts from r/{subreddit}...")
             posts = list(reddit.fetch_recent_posts(subreddit, limit=500))
             all_posts.extend(posts)
             print(f"Fetched {len(posts)} posts/comments from r/{subreddit}")

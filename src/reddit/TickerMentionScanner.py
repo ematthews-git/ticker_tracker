@@ -21,21 +21,21 @@ class TickerMentionScanner:
 
         cursor.execute("""
             INSERT OR IGNORE INTO posts (post_id, subreddit, type, text, created_utc)
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?)
             """, (post.id, post.subreddit, post.type, post.text, post.created_utc))
         
         conn.commit()
         conn.close()
     
     #Counts mentions of valid tickers into dictionary from a list of text
-    def process_mentions(self, post_list: list[Post]) -> dict[str, int]:
+    def process_mentions(self, post_list: list[Post]) -> dict[tuple[str, str], int]:
         """finds the mention of any valid ticker in the list of text parsed and saves each post to db.
 
         Args:
             post_list (Iterable[Post]): The list of post items to search.
 
         Returns:
-            dict[str, int]: A dictionary mapping each ticker symbol to the number of times it was mentioned.
+            dict[tuple[str, str], int]: A dictionary mapping (ticker, subreddit) tuples to mention counts.
         """
         counts = {}
 
@@ -46,6 +46,6 @@ class TickerMentionScanner:
             for t in tickers:
                 if t not in self.invalid:
                     key = (t, post.subreddit)
-                    counts[t] = counts.get(key, 0) + 1 #existing val += 1
+                    counts[key] = counts.get(key, 0) + 1 #existing val += 1
 
         return counts

@@ -21,7 +21,7 @@ class RedditClient:
         try:
             sub = self.reddit.subreddit(subreddit)
             for p in sub.new(limit=limit):
-                yield Post(p.id, subreddit, "post", p. title + ' ' + (p.selftext or ''), p.created_utc)
+                yield Post(p.id, subreddit, "post", p.title + ' ' + (p.selftext or ''), p.created_utc)
                 #get comments
                 p.comments.replace_more(limit=0)
                 for c in p.comments.list():
