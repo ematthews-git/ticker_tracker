@@ -1,6 +1,6 @@
 from reddit.RedditClient import RedditClient
 from reddit.TickerMentionScanner import TickerMentionScanner
-from config import CLIENT_ID, CLIENT_SECRET, USER_AGENT, INVALID, DB_PATH
+from config import CLIENT_ID, CLIENT_SECRET, USER_AGENT, INVALID, DB_PATH, SUBREDDITS
 import schedule
 from datetime import datetime
 import time
@@ -15,15 +15,19 @@ def collect_data():
         reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT)
         scanner = TickerMentionScanner(INVALID)
 
-        #fetch posts
-        print("Fetching posts from r/pennystocks...")
-        posts = list(reddit.fetch_recent_posts("pennystocks", limit=500))
-        print(f"Fetched {len(posts)} posts/comments")
+        all_posts = []
+
+        #fetch posts from each subreddit
+        for subreddit in SUBREDDITS:
+            print("Fetching posts from r/pennystocks...")
+            posts = list(reddit.fetch_recent_posts(subreddit, limit=500))
+            all_posts.extend(posts)
+            print(f"Fetched {len(posts)} posts/comments from r/{subreddit}")
 
         #count mentions and save posts
         print("Counting ticker mentions...")
-        counts = scanner.process_mentions(posts)
-        print(f"Completed. unique tickers: {len(counts)}")
+        counts = scanner.process_mentions(all_posts)
+        print(f"Completed. unique ticker-subreddit combinations: {len(counts)}")
 
         #save mentions
         if counts:
@@ -41,7 +45,7 @@ def main():
     print("=" * 50)
     print("Reddit Ticker Mention Collector")
     print("=" * 50)
-    print(f"Started at: {datetime.now}")
+    print(f"Started at: {datetime.now()}")
     print("Schedule: Every hour")
     print("Press Cmnd+C to stop\n")
 

@@ -16,15 +16,17 @@ def create_database():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS mentions (
                    ticker TEXT NOT NULL,
+                   subreddit TEXT NOT NULL,
                    timestamp DATETIME NOT NULL,
                    mention_count INTEGER NOT NULL,
-                   PRIMARY KEY (ticker, timestamp)
+                   PRIMARY KEY (ticker, subreddit, timestamp)
         );
     """)
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS posts (
                    post_id TEXT PRIMARY KEY,
+                   subreddit TEXT NOT NULL,
                    created_utc DATETIME NOT NULL,
                    text TEXT NOT NULL,
                    type TEXT NOT NULL
