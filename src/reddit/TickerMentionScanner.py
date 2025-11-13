@@ -20,7 +20,7 @@ class TickerMentionScanner:
         cursor = conn.cursor()
 
         cursor.execute("""
-            INSERT OR IGNORE INTO posts (id, type, text, created_utc)
+            INSERT OR IGNORE INTO posts (post_id, type, text, created_utc)
             VALUES (?, ?, ?, ?)
             """, (post.id, post.type, post.text, post.created_utc))
         
