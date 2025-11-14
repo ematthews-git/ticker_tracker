@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Literal
+import datetime
 
 @dataclass
 class Post:
@@ -17,3 +18,11 @@ class Post:
     type: Literal["post", "comment"]
     text: str
     created_utc: float
+
+@dataclass
+class MentionDataPoint:
+    ticker: str
+    subreddit: str
+    timestamp: datetime
+    mention_count: int
+

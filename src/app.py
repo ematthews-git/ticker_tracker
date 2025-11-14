@@ -33,12 +33,12 @@ def collect_data():
         #count mentions and save posts
         print("Counting ticker mentions...")
         counts = scanner.process_mentions(all_posts)
-        print(f"Completed. unique ticker-subreddit combinations: {len(counts)}")
+        print(f"Completed. unique ticker-subreddit combinations: {len(counts)} \n")
 
         #save mentions
         if counts:
             insert_mention_counts(DB_PATH, counts)
-            print(f"Saved items to mentions database")
+            print(f"Saved items to mentions database \n {'='*50}")
         else:
             print("No ticker mentions found")
 
@@ -53,7 +53,7 @@ def main():
     print("=" * 50)
     print(f"Started at: {datetime.now()}")
     print("Schedule: Every hour")
-    print("Press Cmnd+C to stop\n")
+    print("Press Ctrl+C to stop\n")
 
     #schedule the job
     schedule.every().hour.at(":00").do(collect_data)
