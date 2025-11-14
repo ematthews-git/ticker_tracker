@@ -32,13 +32,13 @@ def collect_data():
 
         #count mentions and save posts
         print("Counting ticker mentions...")
-        counts = scanner.process_mentions(all_posts)
-        print(f"Completed. unique ticker-subreddit combinations: {len(counts)} \n")
+        mention_data_points = scanner.process_mentions(all_posts)
+        print(f"Completed. unique ticker-subreddit combinations: {len(mention_data_points)} \n")
 
         #save mentions
-        if counts:
-            insert_mention_counts(DB_PATH, counts)
-            print(f"Saved items to mentions database \n {'='*50}")
+        if mention_data_points:
+            insert_mention_counts(DB_PATH, mention_data_points)
+            print(f"Saved {len(mention_data_points)} items to mentions database \n {'='*50}")
         else:
             print("No ticker mentions found")
 

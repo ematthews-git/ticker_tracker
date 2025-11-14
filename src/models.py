@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Literal
-import datetime
+from datetime import datetime
 
 @dataclass
 class Post:
@@ -21,6 +21,14 @@ class Post:
 
 @dataclass
 class MentionDataPoint:
+    """Represents a single ticker mention data point
+    
+    Attributes:
+        ticker (str): The stock ticker symbol (e.g., 'AAPL').
+        subreddit (str): The subreddit where the mention occurred.
+        timestamp (datetime): The timestamp when the mention was recorded.
+        mention_count (int): The number of times the ticker was mentioned.
+    """
     ticker: str
     subreddit: str
     timestamp: datetime
