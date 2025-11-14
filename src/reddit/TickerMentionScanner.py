@@ -59,14 +59,16 @@ class TickerMentionScanner:
 
             self.save_post(post)
             new_posts += 1
-            
+
             #find ticker mentions
             tickers = re.findall(r'\b[A-Z]{2,5}\b', post.text) #captal letters + 2 to 5 characters
             for t in tickers:
                 if t not in self.invalid:
                     key = (t, post.subreddit)
                     counts[key] = counts.get(key, 0) + 1 #existing val += 1
-
+            
+        
+        print(f"{new_posts} New posts processed")
         return counts
 
     def _get_existing_posts_ids(self) -> set:
