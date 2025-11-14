@@ -2,12 +2,13 @@ import re
 import sqlite3
 import sys
 from pathlib import Path
+from datetime import datetime
 
 # Add parent directory to path to import config and models
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import DB_PATH
-from models import Post
+from models import Post, MentionDataPoint
 
 class TickerMentionScanner:
     """Scans for Ticker Mentions and saves posts to database.
@@ -33,17 +34,18 @@ class TickerMentionScanner:
         conn.commit()
         conn.close()
     
-    #Counts mentions of valid tickers into dictionary from a list of text
-    def process_mentions(self, post_list: list[Post]) -> dict[tuple[str, str], int]:
+    #Counts mentions of valid tickers into list of MentionDataPoint objects
+    def process_mentions(self, post_list: list[Post]) -> list[MentionDataPoint]:
         """finds the mention of any valid ticker in the list of text parsed and saves each post to db.
 
         Args:
             post_list (Iterable[Post]): The list of post items to search.
 
         Returns:
-            dict[tuple[str, str], int]: A dictionary mapping (ticker, subreddit) tuples to mention counts.
+            list[MentionDataPoint]: A list of MentionDataPoint objects representing ticker mentions.
         """
         counts = {}
+        timestamp = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
 
         #get existing posts to avoid double counting
         existing_ids = set()
@@ -64,12 +66,24 @@ class TickerMentionScanner:
             tickers = re.findall(r'\b[A-Z]{2,5}\b', post.text) #captal letters + 2 to 5 characters
             for t in tickers:
                 if t not in self.invalid:
-                    key = (t, post.subreddit)
+                    key = (t.upper(), post.subreddit)
                     counts[key] = counts.get(key, 0) + 1 #existing val += 1
             
         
         print(f"{new_posts} New posts processed")
-        return counts
+        
+        # Convert counts dictionary to list of MentionDataPoint objects
+        mention_data_points = [
+            MentionDataPoint(
+                ticker=ticker,
+                subreddit=subreddit,
+                timestamp=timestamp,
+                mention_count=count
+            )
+            for (ticker, subreddit), count in counts.items()
+        ]
+        
+        return mention_data_points
 
     def _get_existing_posts_ids(self) -> set:
         """Gets set of all post IDs already in the database
