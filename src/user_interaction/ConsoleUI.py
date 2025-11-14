@@ -1,4 +1,6 @@
 from matplotlib import pyplot as plt
+import numpy as np
+from datetime import datetime, timedelta
 
 import sys
 from pathlib import Path
@@ -7,6 +9,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import DB_PATH
+from models import MentionDataPoint
+from storage import Database
 
 def main():
     print("=" * 50)
@@ -22,16 +26,40 @@ def main():
 
         entry = input("Enter number: ")
 
-        if entry == 1:
+        if entry == "1":
             print("*" * 50)
             print("1: Enter ticker to graph it")
             print("*" * 50)
             
-            ticker = input("Enter desired ticker(e.g)'ABC': ")
+            ticker = input("Enter desired ticker(e.g 'ABC'): ")
             graph_ticker(ticker)
 
 
 def graph_ticker(ticker: str):
-    print("67")
+    #get times
+    try:
+        start_time_input = int(input("Enter the number of days you want to view(Max 3): "))
+        if start_time_input > 3: start_time_input = 3
+        now = datetime.now()
+        dif = timedelta(days=start_time_input)
+        start_time = now - dif
+
+        plot_points = list(Database.fetch_ticker_mentions(DB_PATH, ticker, start_time, now))
+
+        x_axis = []
+        y_axis = []
+        for point in plot_points:
+            x_axis.append(point.timestamp)
+            y_axis.append(point.mention_count)
+    
+        plt.plot(x_axis, y_axis)
+        plt.show()
+
+    except Exception as e:
+        print(f"[ERROR] error with graphing ticker: {e}")
+
+if __name__ == "__main__":
+    main()
+
 
     
