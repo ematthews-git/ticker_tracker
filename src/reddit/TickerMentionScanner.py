@@ -14,8 +14,25 @@ from models import Post, MentionDataPoint
 class TickerMentionScanner:
     """Scans for Ticker Mentions and saves posts to database.
     """
-    def __init__(self, invalid_tickers):
+    def __init__(self, invalid_tickers, min_conn=2, max_conn=10):
+        """
+        Args:
+            invalid_tickers: List of ticker symbols to ignore
+            min_conn: Minimum number of connections in the pool (default: 2)
+            max_conn: Maximum number of connections in the pool (default: 10)
+        """
         self.invalid = set(invalid_tickers)
+        # Create connection pool
+        self.connection_pool = psycopg2.pool.SimpleConnectionPool(
+            min_conn, max_conn, DB_URL
+        )
+        if not self.connection_pool:
+            raise Exception("Failed to create database connection pool")
+    
+    def __del__(self):
+        """Clean up connection pool when object is destroyed."""
+        if hasattr(self, 'connection_pool') and self.connection_pool:
+            self.connection_pool.closeall()
 
     def save_post(self, post: Post):
         """Saves one post to the posts table of database.
@@ -23,14 +40,20 @@ class TickerMentionScanner:
         Args:
             post (Post): An instance of the Post dataclass.
         """
-        conn = psycopg2.connect(DB_URL)
+        conn = self.connection_pool.getconn()
+        if conn is None:
+            raise Exception("Failed to get connection from pool")
+        
         cursor = conn.cursor()
 
         try:
+            # Convert Unix timestamp to datetime
+            created_dt = datetime.utcfromtimestamp(post.created_utc)
             cursor.execute("""
-                INSERT INTO posts (post_id, subreddit, type, text, created_utc)
-                VALUES (%s, %s, %s, %s, to_timestamp(%s))
-                """, (post.id, post.subreddit, post.type, post.text, post.created_utc))
+                INSERT INTO posts (post_id, subreddit, created_utc, text, type)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (post_id) DO NOTHING
+                """, (post.id, post.subreddit, created_dt, post.text, post.type))
         
             conn.commit()
         except Exception as e:
@@ -38,7 +61,7 @@ class TickerMentionScanner:
             print(f"Error saving post {post.id}: {e}")
         finally:
             cursor.close()
-            conn.close()
+            self.connection_pool.putconn(conn)
     
     #Counts mentions of valid tickers into list of MentionDataPoint objects
     def process_mentions(self, post_list: list[Post]) -> list[MentionDataPoint]:
@@ -96,7 +119,10 @@ class TickerMentionScanner:
         Returns:
             set: all post IDs
         """
-        conn = psycopg2.connect(DB_URL)
+        conn = self.connection_pool.getconn()
+        if conn is None:
+            raise Exception("Failed to get connection from pool")
+        
         cursor = conn.cursor()
 
         try:
@@ -105,4 +131,9 @@ class TickerMentionScanner:
             return existing_ids
         finally:
             cursor.close()
-            conn.close()
+            self.connection_pool.putconn(conn)
+    
+    def close_pool(self):
+        """Explicitly close the connection pool. Called automatically in __del__."""
+        if hasattr(self, 'connection_pool') and self.connection_pool:
+            self.connection_pool.closeall()
