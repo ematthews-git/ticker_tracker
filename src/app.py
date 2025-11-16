@@ -15,7 +15,7 @@ from storage.Database import insert_mention_counts
 def collect_data():
     """Collects ticker mentions and saves to database
     """
-    print(f"[{datetime.now}] starting data collection...")
+    print(f"[{datetime.now()}] starting data collection...")
     try:
         #initialise clients
         reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT)
