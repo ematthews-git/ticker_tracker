@@ -2,14 +2,73 @@ import sqlite3
 import os
 import sys
 from pathlib import Path
+import psycopg2
 
 # Add parent directory to path to import config
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from config import DB_PATH
+from config import DB_PATH, DB_URL
 
-print(DB_PATH)
+print(DB_URL)
 
-def create_database():
+def create_database_postgres(db_url):
+
+    conn = psycopg2.connect(db_url)
+    cursor = conn.cursor()
+
+    #create mentions
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mentions (
+                   ticker TEXT NOT NULL,
+                   subreddit TEXT NOT NULL,
+                   timestamp TIMESTAMPTZ NOT NULL,
+                   mention_count INTEGER NOT NULL,
+                   PRIMARY KEY (ticker, subreddit, timestamp)
+        );
+        """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_mentions_ticker_timestamp 
+        ON mentions(ticker, timestamp DESC);
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_mentions_subreddit_timestamp 
+        ON mentions(subreddit, timestamp DESC);
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_mentions_timestamp 
+        ON mentions(timestamp DESC);
+    """)
+    
+    # For Discord bot: composite index for specific ticker+subreddit queries
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_mentions_ticker_subreddit_timestamp 
+        ON mentions(ticker, subreddit, timestamp DESC);
+    """)
+
+    #posts
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS posts (
+                   post_id TEXT PRIMARY KEY,
+                   subreddit TEXT NOT NULL,
+                   created_utc TIMESTAMPTZ NOT NULL,
+                   text TEXT NOT NULL,
+                   type TEXT NOT NULL
+        );
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_posts_subreddit 
+        ON posts(subreddit);
+    """)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print("database created")
+
+def create_database_sqlite():
     """Creates database with:
     mentions table and posts table
     """
@@ -43,4 +102,5 @@ def create_database():
     print("Database and tables created successfully.")
 
 if __name__ == "__main__":
-    create_database()
+    #create_database_sqlite()
+    create_database_postgres(DB_URL)

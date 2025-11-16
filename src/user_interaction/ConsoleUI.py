@@ -8,7 +8,7 @@ from pathlib import Path
 # Add parent directory to path to import config and models
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import DB_PATH, SUBREDDITS
+from config import DB_URL, SUBREDDITS
 from models import MentionDataPoint
 from storage import Database
 
@@ -48,7 +48,7 @@ def graph_ticker(ticker: str):
         start_time = now - dif
 
         ####
-        plot_points = list(Database.fetch_ticker_mentions(DB_PATH, ticker, start_time, now))
+        plot_points = list(Database.fetch_ticker_mentions(DB_URL, ticker, start_time, now))
 
         #these are lists containg each axis list for the subreddits
         all_x_axis = []
