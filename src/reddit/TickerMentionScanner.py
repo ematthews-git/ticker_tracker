@@ -1,5 +1,6 @@
 import re
 import sqlite3
+import psycopg2
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -7,14 +8,13 @@ from datetime import datetime
 # Add parent directory to path to import config and models
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import DB_PATH
+from config import DB_URL
 from models import Post, MentionDataPoint
 
 class TickerMentionScanner:
     """Scans for Ticker Mentions and saves posts to database.
     """
     def __init__(self, invalid_tickers):
-        
         self.invalid = set(invalid_tickers)
 
     def save_post(self, post: Post):
@@ -23,16 +23,22 @@ class TickerMentionScanner:
         Args:
             post (Post): An instance of the Post dataclass.
         """
-        conn = sqlite3.connect(DB_PATH)
+        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
 
-        cursor.execute("""
-            INSERT OR IGNORE INTO posts (post_id, subreddit, type, text, created_utc)
-            VALUES (?, ?, ?, ?, ?)
-            """, (post.id, post.subreddit, post.type, post.text, post.created_utc))
+        try:
+            cursor.execute("""
+                INSERT INTO posts (post_id, subreddit, type, text, created_utc)
+                VALUES (%s, %s, %s, %s, to_timestamp(%s))
+                """, (post.id, post.subreddit, post.type, post.text, post.created_utc))
         
-        conn.commit()
-        conn.close()
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            print(f"Error saving post {post.id}: {e}")
+        finally:
+            cursor.close()
+            conn.close()
     
     #Counts mentions of valid tickers into list of MentionDataPoint objects
     def process_mentions(self, post_list: list[Post]) -> list[MentionDataPoint]:
@@ -90,11 +96,13 @@ class TickerMentionScanner:
         Returns:
             set: all post IDs
         """
-        conn = sqlite3.connect(DB_PATH)
+        conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
 
-        cursor.execute("SELECT post_id FROM posts")
-        existing_ids = {row[0] for row in cursor.fetchall()}
-
-        conn.close()
-        return existing_ids
+        try:
+            cursor.execute("SELECT post_id FROM posts")
+            existing_ids = {row[0] for row in cursor.fetchall()}
+            return existing_ids
+        finally:
+            cursor.close()
+            conn.close()

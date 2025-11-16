@@ -11,3 +11,4 @@ CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
 USER_AGENT = os.getenv("REDDIT_USER_AGENT")
 
 DB_PATH = os.getenv("DATABASE_PATH")
+DB_URL = os.getenv("DATABASE_URL")
