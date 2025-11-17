@@ -1,6 +1,7 @@
 import re
 import sqlite3
 import psycopg2
+from psycopg2.extras import execute_batch
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -47,6 +48,34 @@ class TickerMentionScanner:
         finally:
             cursor.close()
             conn.close()
+
+    def _batch_save_posts(self, posts_data: list[tuple]):
+        """Batch saves multiple posts to the database in a single transaction.
+        
+        Args:
+            posts_data: List of tuples (post_id, subreddit, created_utc, text, type)
+        """
+        if not posts_data:
+            return
+
+        conn = psycopg2.connect(self.db_url)
+        cursor = conn.cursor()
+
+        try:
+            execute_batch(cursor, """
+                INSERT INTO posts (post_id, subreddit, created_utc, text, type)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (post_id) DO NOTHING
+                """, posts_data)
+            
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            print(f"Error batch saving posts: {e}")
+            raise
+        finally:
+            cursor.close()
+            conn.close()
     
     #Counts mentions of valid tickers into list of MentionDataPoint objects
     def process_mentions(self, post_list: list[Post]) -> list[MentionDataPoint]:
@@ -66,19 +95,29 @@ class TickerMentionScanner:
         existing_ids = self._get_existing_posts_ids()
         print(f"Found {len(existing_ids)} existing posts in database")
 
-        new_posts = 0
+        # Collect new posts to batch insert
+        new_posts = []
+        posts_to_process = []
 
         for post in post_list:
             #skip if already processed
             if post.id in existing_ids:
                 continue
 
-            self.save_post(post)
-            new_posts += 1
+            # Convert Unix timestamp to datetime for batch insert
+            created_dt = datetime.utcfromtimestamp(post.created_utc)
+            new_posts.append((post.id, post.subreddit, created_dt, post.text, post.type))
+            posts_to_process.append(post)
 
+        # Batch insert all new posts at once
+        if new_posts:
+            self._batch_save_posts(new_posts)
+            print(f"{len(new_posts)} New posts saved to database")
+
+        # Process ticker mentions for new posts
+        for post in posts_to_process:
             #find ticker mentions
             tickers = re.findall(r'\b[A-Z]{2,5}\b', post.text) #captal letters + 2 to 5 characters
-            print("Found tickers")
             for t in tickers:
                 if t in self.valid:
                     key = (t.upper(), post.subreddit)
