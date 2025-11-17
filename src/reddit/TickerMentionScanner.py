@@ -14,26 +14,13 @@ from models import Post, MentionDataPoint
 class TickerMentionScanner:
     """Scans for Ticker Mentions and saves posts to database.
     """
-    def __init__(self, valid_tickers, min_conn=2, max_conn=10):
+    def __init__(self, valid_tickers):
         """
         Args:
-            invalid_tickers: List of ticker symbols to ignore
-            min_conn: Minimum number of connections in the pool (default: 2)
-            max_conn: Maximum number of connections in the pool (default: 10)
+            valid_tickers: List of ticker symbols to search for
         """
         self.valid = set(valid_tickers)
-
-        # Create connection pool
-        self.connection_pool = psycopg2.pool.SimpleConnectionPool(
-            min_conn, max_conn, DB_URL
-        )
-        if not self.connection_pool:
-            raise Exception("Failed to create database connection pool")
-    
-    def __del__(self):
-        """Clean up connection pool when object is destroyed."""
-        if hasattr(self, 'connection_pool') and self.connection_pool:
-            self.connection_pool.closeall()
+        self.db_url = DB_URL
 
     def save_post(self, post: Post):
         """Saves one post to the posts table of database.
@@ -41,10 +28,7 @@ class TickerMentionScanner:
         Args:
             post (Post): An instance of the Post dataclass.
         """
-        conn = self.connection_pool.getconn()
-        if conn is None:
-            raise Exception("Failed to get connection from pool")
-        
+        conn = psycopg2.connect(self.db_url)
         cursor = conn.cursor()
 
         try:
@@ -62,7 +46,7 @@ class TickerMentionScanner:
             print(f"Error saving post {post.id}: {e}")
         finally:
             cursor.close()
-            self.connection_pool.putconn(conn)
+            conn.close()
     
     #Counts mentions of valid tickers into list of MentionDataPoint objects
     def process_mentions(self, post_list: list[Post]) -> list[MentionDataPoint]:
@@ -119,10 +103,7 @@ class TickerMentionScanner:
         Returns:
             set: all post IDs
         """
-        conn = self.connection_pool.getconn()
-        if conn is None:
-            raise Exception("Failed to get connection from pool")
-        
+        conn = psycopg2.connect(self.db_url)
         cursor = conn.cursor()
 
         try:
@@ -131,9 +112,4 @@ class TickerMentionScanner:
             return existing_ids
         finally:
             cursor.close()
-            self.connection_pool.putconn(conn)
-    
-    def close_pool(self):
-        """Explicitly close the connection pool. Called automatically in __del__."""
-        if hasattr(self, 'connection_pool') and self.connection_pool:
-            self.connection_pool.closeall()
+            conn.close()
