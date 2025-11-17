@@ -14,14 +14,15 @@ from models import Post, MentionDataPoint
 class TickerMentionScanner:
     """Scans for Ticker Mentions and saves posts to database.
     """
-    def __init__(self, invalid_tickers, min_conn=2, max_conn=10):
+    def __init__(self, valid_tickers, min_conn=2, max_conn=10):
         """
         Args:
             invalid_tickers: List of ticker symbols to ignore
             min_conn: Minimum number of connections in the pool (default: 2)
             max_conn: Maximum number of connections in the pool (default: 10)
         """
-        self.invalid = set(invalid_tickers)
+        self.valid = set(valid_tickers)
+
         # Create connection pool
         self.connection_pool = psycopg2.pool.SimpleConnectionPool(
             min_conn, max_conn, DB_URL
@@ -94,11 +95,10 @@ class TickerMentionScanner:
             #find ticker mentions
             tickers = re.findall(r'\b[A-Z]{2,5}\b', post.text) #captal letters + 2 to 5 characters
             for t in tickers:
-                if t not in self.invalid:
+                if t in self.valid:
                     key = (t.upper(), post.subreddit)
                     counts[key] = counts.get(key, 0) + 1 #existing val += 1
             
-        
         print(f"{new_posts} New posts processed")
         
         # Convert counts dictionary to list of MentionDataPoint objects
