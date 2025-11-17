@@ -56,7 +56,7 @@ def main():
     print("Press Ctrl+C to stop\n")
     inp = input("Enter 1 to force data collection now, or anything else to wait for the next hour: ")
 
-    if inp == 1:
+    if inp == "1":
         collect_data()
 
     #schedule the job
