@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from reddit.RedditClient import RedditClient
 from reddit.TickerMentionScanner import TickerMentionScanner
-from config import CLIENT_ID, CLIENT_SECRET, USER_AGENT, INVALID, DB_URL, SUBREDDITS
+from config import CLIENT_ID, CLIENT_SECRET, USER_AGENT, VALID, DB_URL, SUBREDDITS
 import schedule
 from datetime import datetime
 import time
@@ -19,7 +19,7 @@ def collect_data():
     try:
         #initialise clients
         reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT)
-        scanner = TickerMentionScanner(INVALID)
+        scanner = TickerMentionScanner(VALID)
 
         all_posts = []
 
