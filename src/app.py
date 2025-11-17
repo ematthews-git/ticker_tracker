@@ -54,6 +54,10 @@ def main():
     print(f"Started at: {datetime.now()}")
     print("Schedule: Every hour")
     print("Press Ctrl+C to stop\n")
+    inp = input("Enter 1 to force data collection now, or anything else to wait for the next hour: ")
+
+    if inp == "1":
+        collect_data()
 
     #schedule the job
     schedule.every().hour.at(":00").do(collect_data)

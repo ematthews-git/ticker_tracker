@@ -78,6 +78,7 @@ class TickerMentionScanner:
 
             #find ticker mentions
             tickers = re.findall(r'\b[A-Z]{2,5}\b', post.text) #captal letters + 2 to 5 characters
+            print("Found tickers")
             for t in tickers:
                 if t in self.valid:
                     key = (t.upper(), post.subreddit)
