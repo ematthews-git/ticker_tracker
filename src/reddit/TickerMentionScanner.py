@@ -4,7 +4,7 @@ import psycopg2
 from psycopg2.extras import execute_batch
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Add parent directory to path to import config and models
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -33,8 +33,8 @@ class TickerMentionScanner:
         cursor = conn.cursor()
 
         try:
-            # Convert Unix timestamp to datetime
-            created_dt = datetime.utcfromtimestamp(post.created_utc)
+            # Convert Unix timestamp to datetime (UTC)
+            created_dt = datetime.fromtimestamp(post.created_utc, tz=timezone.utc)
             cursor.execute("""
                 INSERT INTO posts (post_id, subreddit, created_utc, text, type)
                 VALUES (%s, %s, %s, %s, %s)
@@ -88,7 +88,7 @@ class TickerMentionScanner:
             list[MentionDataPoint]: A list of MentionDataPoint objects representing ticker mentions.
         """
         counts = {}
-        timestamp = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+        timestamp = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
         #get existing posts to avoid double counting
         existing_ids = set()
@@ -104,8 +104,8 @@ class TickerMentionScanner:
             if post.id in existing_ids:
                 continue
 
-            # Convert Unix timestamp to datetime for batch insert
-            created_dt = datetime.utcfromtimestamp(post.created_utc)
+            # Convert Unix timestamp to datetime for batch insert (UTC)
+            created_dt = datetime.fromtimestamp(post.created_utc, tz=timezone.utc)
             new_posts.append((post.id, post.subreddit, created_dt, post.text, post.type))
             posts_to_process.append(post)
 
@@ -123,7 +123,7 @@ class TickerMentionScanner:
                     key = (t.upper(), post.subreddit)
                     counts[key] = counts.get(key, 0) + 1 #existing val += 1
             
-        print(f"{new_posts} New posts processed")
+        print(f"{len(posts_to_process)} New posts processed")
         
         # Convert counts dictionary to list of MentionDataPoint objects
         mention_data_points = [

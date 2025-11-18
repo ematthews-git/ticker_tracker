@@ -89,10 +89,66 @@ def fetch_ticker_mentions(db_url, ticker: str, start_date: datetime, end_date: d
         return mention_data_points
     except Exception as e:
         print(f"Error fetching data: {e}")
+        raise
     finally:
         cursor.close()
         conn.close()
     
+def fetch_popular_tickers(db_url: str, start_date: datetime, end_date: datetime, amount: int=10) -> dict[str, list[MentionDataPoint]]:
+    """Gets a list of the most popular tickers in a timeframe.
 
+    Args:
+        db_url (str): The connection URL to the database.
+        start_date (datetime): The start of the date range to query.
+        end_date (datetime): The end of the date range to query.
+        amount (int, optional): The number of tickers to be returned. Defaults to 10.
 
-    
+    Returns:
+        dict[str, list[MentionDataPoint]]: Maps a ticker to every point where it was mentioned for the given paramaters, 
+                                            ordered where the first index is the most popular.
+    """
+
+    conn = psycopg2.connect(db_url)
+    cursor = conn.cursor()
+
+    try: 
+        cursor.execute("""
+            WITH top_tickers AS (
+                SELECT
+                    ticker,
+                    SUM(mention_count) AS total_mentions
+                FROM mentions
+                WHERE timestamp BETWEEN %s and %s
+                GROUP by ticker
+                ORDER by total_mentions DESC
+                LIMIT %s
+            )
+            SELECT m.ticker, m.subreddit, m.timestamp, m.mention_count
+            FROM mentions m
+            JOIN top_tickers t ON m.ticker = t.ticker
+            WHERE m.timestamp BETWEEN %s and %s
+            ORDER BY t.total_mentions DESC, m.ticker, m.timestamp;
+        """, (start_date, end_date, amount, start_date, end_date))
+
+        rows = cursor.fetchall()
+        print(f"[DEBUG] Final query returned {len(rows)} rows")
+        result = dict()
+
+        for ticker, subreddit, timestamp, count in rows:
+            dp = MentionDataPoint(
+                ticker=ticker,
+                subreddit=subreddit,
+                timestamp=timestamp,
+                mention_count=count
+            )
+            if ticker not in result:
+                result[ticker] = []
+            result[ticker].append(dp)
+        
+        return result
+    except Exception as e:
+        print(f"Error fetching popular tickers: {e}")
+        raise
+    finally:
+        cursor.close()
+        conn.close()

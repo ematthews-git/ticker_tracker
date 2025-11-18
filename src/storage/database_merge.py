@@ -3,7 +3,7 @@ import sys
 import argparse
 import shutil
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Add parent directory to path to import config
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -19,7 +19,7 @@ def create_backup(target_path: Path) -> Path:
     Returns:
         Path to the backup file
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     backup_path = target_path.parent / f"{target_path.stem}_backup_{timestamp}{target_path.suffix}"
     shutil.copy2(target_path, backup_path)
     return backup_path

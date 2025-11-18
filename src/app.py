@@ -8,14 +8,14 @@ from reddit.RedditClient import RedditClient
 from reddit.TickerMentionScanner import TickerMentionScanner
 from config import CLIENT_ID, CLIENT_SECRET, USER_AGENT, VALID, DB_URL, SUBREDDITS
 import schedule
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 from storage.Database import insert_mention_counts
 
 def collect_data():
     """Collects ticker mentions and saves to database
     """
-    print(f"[{datetime.now()}] starting data collection...")
+    print(f"[{datetime.now(timezone.utc)}] starting data collection...")
     try:
         #initialise clients
         reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT)
@@ -51,7 +51,7 @@ def main():
     print("=" * 50)
     print("Reddit Ticker Mention Collector")
     print("=" * 50)
-    print(f"Started at: {datetime.now()}")
+    print(f"Started at: {datetime.now(timezone.utc)}")
     print("Schedule: Every hour")
     print("Press Ctrl+C to stop\n")
     inp = input("Enter 1 to force data collection now, or anything else to wait for the next hour: ")

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Literal
 from datetime import datetime
 
-@dataclass
+@dataclass(frozen=True)
 class Post:
     """Represents a reddit post or comment
 
@@ -19,7 +19,7 @@ class Post:
     text: str
     created_utc: float
 
-@dataclass
+@dataclass(frozen=True)
 class MentionDataPoint:
     """Represents a single ticker mention data point
     
