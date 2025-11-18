@@ -121,7 +121,6 @@ def display_popular_tickers():
         print(f"{ticker}: {total_mentions}")
 
 
-
 if __name__ == "__main__":
     main()
 
