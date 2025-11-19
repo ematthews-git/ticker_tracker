@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Optional
 from datetime import datetime
 
 @dataclass(frozen=True)
@@ -12,12 +12,14 @@ class Post:
         type (Literal["post", "comment"]): Indicates whether the entry is a post or comment.
         text (str): The combined title and body (or comment text).
         created_utc (float): The UTC timestamp of creation (as returned by PRAW).
+        origin_id (Optional[str]): A comments origin post id. None for posts.
     """
     id: str
     subreddit: str
     type: Literal["post", "comment"]
     text: str
     created_utc: float
+    origin_id: Optional[str]
 
 @dataclass(frozen=True)
 class MentionDataPoint:
