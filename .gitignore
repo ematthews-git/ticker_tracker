@@ -10,3 +10,6 @@ __pycache__/
 data/
 
 fetch_valid_tickers.py
+
+logs/
+*.log
