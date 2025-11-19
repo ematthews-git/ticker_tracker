@@ -1,3 +1,7 @@
+from logging_setup import configure_logging
+import logging
+configure_logging()
+
 import sys
 from pathlib import Path
 
@@ -11,8 +15,6 @@ import schedule
 from datetime import datetime, timezone
 import time
 from storage.Database import insert_mention_counts
-from logging_setup import configure_logging
-import logging
 
 def collect_data() -> None:
     """Collects ticker mentions and saves to database
@@ -43,7 +45,7 @@ def collect_data() -> None:
             insert_mention_counts(DB_URL, mention_data_points)
             logger.info(f"Saved {len(mention_data_points)} items to mentions database \n {'='*50}")
         else:
-            logger.warn("No ticker mentions found")
+            logger.warning("No ticker mentions found")
 
     except Exception as e:
         logger.error(f"Data collection failed: {e}")
@@ -77,5 +79,4 @@ def main():
         logger.info("\n\n Scheduler stopped by user")
 
 if __name__ == "__main__":
-    configure_logging()
-    main()
+     main()
