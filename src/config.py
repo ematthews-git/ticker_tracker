@@ -15,7 +15,10 @@ def load_valid_tickers():
 
 VALID = load_valid_tickers()
 
-INVALID = ['YOLO', 'HOLD', 'HODL', 'WSB', 'CEO', 'CFO', 'IPO', 'ETF']
+LOG_PATH = os.getenv("LOG_FILE_PATH", "var/log/reddit-tracker.log")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+#The subreddits being processed
 SUBREDDITS = ["pennystocks", "10xpennystocks", "Daytrading", "SmallStreetBets"]
 
 CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")

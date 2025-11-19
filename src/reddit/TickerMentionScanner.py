@@ -12,6 +12,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import DB_URL
 from models import Post, MentionDataPoint
 
+import logging
+logger = logging.getLogger(__name__)
+
 class TickerMentionScanner:
     """Scans for Ticker Mentions and saves posts to database.
     """
@@ -23,7 +26,7 @@ class TickerMentionScanner:
         self.valid = set(valid_tickers)
         self.db_url = DB_URL
 
-    def save_post(self, post: Post):
+    def save_post(self, post: Post) -> None:
         """Saves one post to the posts table of database.
         
         Args:
@@ -44,12 +47,12 @@ class TickerMentionScanner:
             conn.commit()
         except Exception as e:
             conn.rollback()
-            print(f"Error saving post {post.id}: {e}")
+            logger.error(f"Error saving post {post.id}: {e}")
         finally:
             cursor.close()
             conn.close()
 
-    def _batch_save_posts(self, posts_data: list[tuple]):
+    def _batch_save_posts(self, posts_data: list[tuple]) -> None:
         """Batch saves multiple posts to the database in a single transaction.
         
         Args:
@@ -71,7 +74,7 @@ class TickerMentionScanner:
             conn.commit()
         except Exception as e:
             conn.rollback()
-            print(f"Error batch saving posts: {e}")
+            logger.error(f"Error batch saving posts: {e}")
             raise
         finally:
             cursor.close()
@@ -93,7 +96,7 @@ class TickerMentionScanner:
         #get existing posts to avoid double counting
         existing_ids = set()
         existing_ids = self._get_existing_posts_ids()
-        print(f"Found {len(existing_ids)} existing posts in database")
+        logger.info(f"Found {len(existing_ids)} existing posts in database")
 
         # Collect new posts to batch insert
         new_posts = []
@@ -112,7 +115,7 @@ class TickerMentionScanner:
         # Batch insert all new posts at once
         if new_posts:
             self._batch_save_posts(new_posts)
-            print(f"{len(new_posts)} New posts saved to database")
+            logger.info(f"{len(new_posts)} New posts saved to database")
 
         # Process ticker mentions for new posts
         for post in posts_to_process:
@@ -123,7 +126,7 @@ class TickerMentionScanner:
                     key = (t.upper(), post.subreddit)
                     counts[key] = counts.get(key, 0) + 1 #existing val += 1
             
-        print(f"{len(posts_to_process)} New posts processed")
+        logger.info(f"{len(posts_to_process)} New posts processed")
         
         # Convert counts dictionary to list of MentionDataPoint objects
         mention_data_points = [
