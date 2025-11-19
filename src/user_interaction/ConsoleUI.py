@@ -54,7 +54,6 @@ def graph_ticker(ticker: str):
         now = datetime.now(timezone.utc)
         dif = timedelta(days=start_time_input)
         start_time = now - dif
-        print(f"{start_time}, \n {now}")
 
         ####
         plot_points = list(Database.fetch_ticker_mentions(DB_URL, ticker, start_time, now))
@@ -106,7 +105,6 @@ def display_popular_tickers():
         print("Timeframe formatted incorrectly")
 
     start_time = now - dif
-    print(f"{start_time}, \n {now}")
 
     amount = int(input("How many tickers would you like to see(min = 10, max = 30): "))
     if amount > 30: amount = 30

@@ -1,6 +1,9 @@
 import praw 
 from models import Post
 
+import logging
+logger = logging.getLogger(__name__)
+
 class RedditClient:
     """Establishes a connection with the reddit api and communicates with the reddit API.
     """
@@ -27,6 +30,6 @@ class RedditClient:
                 for c in p.comments.list():
                     yield Post(c.id, subreddit, "comment", c.body, c.created_utc)
         except Exception as e:
-            print(f"Error connecting with subreddit '{subreddit}': {e}")
+            logger.error(f"Error connecting with subreddit '{subreddit}': {e}")
     
     

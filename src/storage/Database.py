@@ -9,8 +9,10 @@ from psycopg2.extras import execute_batch
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models import MentionDataPoint
+import logging
+logger = logging.getLogger(__name__)
 
-def insert_mention_counts(db_url, mention_data_points: list[MentionDataPoint]):
+def insert_mention_counts(db_url, mention_data_points: list[MentionDataPoint]) -> None:
     """Adds each MentionDataPoint to the database.
 
     Args:
@@ -20,10 +22,12 @@ def insert_mention_counts(db_url, mention_data_points: list[MentionDataPoint]):
     if not mention_data_points:
         return
 
+    #connect to db
     conn = psycopg2.connect(db_url)
     cursor = conn.cursor()
 
     try:
+        #gets a list of every data point to be added, with variables prepared for SQL batch insert
         data = [
             (data_point.ticker.upper(),
              data_point.subreddit,
@@ -41,7 +45,7 @@ def insert_mention_counts(db_url, mention_data_points: list[MentionDataPoint]):
         conn.commit()
     except Exception as e:
         conn.rollback()
-        print(f"Error inserting mention counts: {e}")
+        logger.error(f"Error inserting mention counts: {e}")
         raise
     finally:
         cursor.close()
@@ -75,6 +79,7 @@ def fetch_ticker_mentions(db_url, ticker: str, start_date: datetime, end_date: d
         cursor.execute(query, (ticker.upper(), start_date, end_date))
         rows = cursor.fetchall()
 
+        #constructs the list of mentionDataPoints 
         mention_data_points = []
         for ticker_val, subreddit, timestamp, count in rows:
             mention_data_points.append(
@@ -88,7 +93,7 @@ def fetch_ticker_mentions(db_url, ticker: str, start_date: datetime, end_date: d
     
         return mention_data_points
     except Exception as e:
-        print(f"Error fetching data: {e}")
+        logger.error(f"Error fetching data: {e}")
         raise
     finally:
         cursor.close()
@@ -112,6 +117,8 @@ def fetch_popular_tickers(db_url: str, start_date: datetime, end_date: datetime,
     cursor = conn.cursor()
 
     try: 
+        #First gets the top tickers and their total mentions ordered by total mentions
+        #Then using the top tickers to get each tickers mentionDataPoints to return
         cursor.execute("""
             WITH top_tickers AS (
                 SELECT
@@ -131,9 +138,10 @@ def fetch_popular_tickers(db_url: str, start_date: datetime, end_date: datetime,
         """, (start_date, end_date, amount, start_date, end_date))
 
         rows = cursor.fetchall()
-        print(f"[DEBUG] Final query returned {len(rows)} rows")
+        logger.debug(f"[DEBUG] Final query returned {len(rows)} rows")
         result = dict()
 
+        #construct return object
         for ticker, subreddit, timestamp, count in rows:
             dp = MentionDataPoint(
                 ticker=ticker,
@@ -147,7 +155,7 @@ def fetch_popular_tickers(db_url: str, start_date: datetime, end_date: datetime,
         
         return result
     except Exception as e:
-        print(f"Error fetching popular tickers: {e}")
+        logger.error(f"Error fetching popular tickers: {e}")
         raise
     finally:
         cursor.close()
