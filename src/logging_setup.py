@@ -8,7 +8,7 @@ def configure_logging() -> None:
     root = logging.getLogger()
 
     #Avoid adding handlers twice
-    if root.handle:
+    if root.handlers:
         return
     
     level = getattr(logging, LOG_LEVEL.upper(), logging.INFO)

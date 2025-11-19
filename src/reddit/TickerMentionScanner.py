@@ -39,10 +39,10 @@ class TickerMentionScanner:
             # Convert Unix timestamp to datetime (UTC)
             created_dt = datetime.fromtimestamp(post.created_utc, tz=timezone.utc)
             cursor.execute("""
-                INSERT INTO posts (post_id, subreddit, created_utc, text, type)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO posts (post_id, subreddit, created_utc, text, type, origin_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (post_id) DO NOTHING
-                """, (post.id, post.subreddit, created_dt, post.text, post.type))
+                """, (post.id, post.subreddit, created_dt, post.text, post.type, post.origin_id))
         
             conn.commit()
         except Exception as e:
@@ -56,7 +56,7 @@ class TickerMentionScanner:
         """Batch saves multiple posts to the database in a single transaction.
         
         Args:
-            posts_data: List of tuples (post_id, subreddit, created_utc, text, type)
+            posts_data: List of tuples (post_id, subreddit, created_utc, text, type, origin_id)
         """
         if not posts_data:
             return
@@ -66,8 +66,8 @@ class TickerMentionScanner:
 
         try:
             execute_batch(cursor, """
-                INSERT INTO posts (post_id, subreddit, created_utc, text, type)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO posts (post_id, subreddit, created_utc, text, type, origin_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (post_id) DO NOTHING
                 """, posts_data)
             
@@ -109,7 +109,7 @@ class TickerMentionScanner:
 
             # Convert Unix timestamp to datetime for batch insert (UTC)
             created_dt = datetime.fromtimestamp(post.created_utc, tz=timezone.utc)
-            new_posts.append((post.id, post.subreddit, created_dt, post.text, post.type))
+            new_posts.append((post.id, post.subreddit, created_dt, post.text, post.type, post.origin_id))
             posts_to_process.append(post)
 
         # Batch insert all new posts at once
