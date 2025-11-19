@@ -13,3 +13,5 @@ fetch_valid_tickers.py
 
 logs/
 *.log
+
+.DS_Store
