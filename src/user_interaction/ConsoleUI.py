@@ -1,16 +1,3 @@
-from matplotlib import pyplot as plt
-import numpy as np
-from datetime import datetime, timedelta, timezone
-
-import sys
-from pathlib import Path
-
-# Add parent directory to path to import config and models
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from config import DB_URL, SUBREDDITS
-from models import MentionDataPoint
-from storage import Database
 from visualiser import Visualiser
 
 def main():
@@ -50,8 +37,6 @@ def main():
             print("*" * 50)
             print("3: Emerging tickers")
             print("*" * 50)
-
-
 
 def display_emerging_tickers():
     pass

@@ -1,5 +1,6 @@
 from matplotlib import pyplot as plt
 import numpy as np
+import pandas as pd
 from datetime import datetime, timedelta, timezone
 
 import sys
@@ -15,7 +16,6 @@ from utils import helper
 
 class Visualiser:
     """The visualiser communicates with the database to visualise basic information"""
-
     def __init__(self) -> None:
         pass
 
@@ -60,14 +60,13 @@ class Visualiser:
             print(f"[ERROR] error with graphing ticker: {e}")
 
     def display_popular_tickers(self):
-        """Asks the user for parameters and displays the most popular tickers based on those parameters.
-        """
+        """Asks the user for parameters and displays the most popular tickers based on those parameters."""
         try: 
             timeframe = input("Enter timeframe(e.g '12h', '1d', '1w'): ")
             now = datetime.now(timezone.utc)
             dif = helper.parse_time_input(timeframe)
-        except:
-            print("Timeframe formatted incorrectly")
+        except Exception as e:
+            print(f"Timeframe formatted incorrectly: {e}")
 
         start_time = now - dif
 
@@ -76,7 +75,6 @@ class Visualiser:
         elif amount < 10: amount = 10
 
         popular_tickers = Database.fetch_popular_tickers(DB_URL, start_time, now, amount)
-        print(len(popular_tickers))
 
         #displaying
         for ticker, points in popular_tickers.items():
