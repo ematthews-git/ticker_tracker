@@ -22,33 +22,31 @@ class Visualiser:
     def graph_ticker(self, ticker: str):
         try:
             #get times
-            start_time_input = int(input("Enter the number of days you want to view(Max 3): "))
-            if start_time_input > 3: start_time_input = 3
-            now = datetime.now(timezone.utc)
-            dif = timedelta(days=start_time_input)
-            start_time = now - dif
+            try:
+                start_time_input = input("Enter timeframe(e.g '12h', '1d', '1w'): ")
+                now = datetime.now(timezone.utc)
+                dif = helper.parse_time_input(start_time_input)
+                start_time = now - dif
+            except ValueError as e:
+                print(f"Timeframe formatted incorrectly: {e}")
+                return
 
-            ####
             plot_points = list(Database.fetch_ticker_mentions(DB_URL, ticker, start_time, now))
 
-            #these are lists containg each axis list for the subreddits
-            all_x_axis = []
-            all_y_axis = []
+            #Convert to dataframe
+            df = pd.DataFrame([
+                {
+                    'timestamp': point.timestamp,
+                    'mention_count': point.mention_count,
+                    'subreddit': point.subreddit
+                }
+                for point in plot_points
+            ])
 
             for sub in SUBREDDITS:
-                x = []
-                y = []
-                for point in plot_points:
-                    if point.subreddit == sub:
-                        x.append(point.timestamp)
-                        y.append(point.mention_count)
+                sub_data = df[df['subreddit'] == sub]
+                plt.plot(sub_data['timestamp'], sub_data['mention_count'], label=sub)
                 
-                all_x_axis.append(x)
-                all_y_axis.append(y)
-            
-            for i, sub in enumerate(SUBREDDITS):
-                plt.plot(all_x_axis[i], all_y_axis[i], label=sub)
-
             plt.title(f"""{ticker.upper()} mentions from 
                     {start_time.replace(microsecond=0, second=0, minute=0)} to {now.replace(microsecond=0, second=0, minute=0)}""")
             plt.legend()
@@ -67,6 +65,7 @@ class Visualiser:
             dif = helper.parse_time_input(timeframe)
         except Exception as e:
             print(f"Timeframe formatted incorrectly: {e}")
+            return
 
         start_time = now - dif
 
