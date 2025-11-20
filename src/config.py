@@ -19,7 +19,7 @@ LOG_PATH = os.getenv("LOG_FILE_PATH", "var/log/reddit-tracker.log")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 #The subreddits being processed
-SUBREDDITS = ["pennystocks", "10xpennystocks", "Daytrading", "SmallStreetBets"]
+SUBREDDITS = ["pennystocks", "10xpennystocks", "Daytrading", "SmallStreetBets", "Shortsqueeze"]
 
 CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
 CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")

@@ -24,7 +24,6 @@ class RedditClient:
             Post: a post dataclass instance representing an entry from the subreddit.
         """
         try:
-            now_utc = datetime.now(timezone.utc)
             logger.debug(f"Fetching {limit} recent posts from r/{subreddit}")
 
             sub = self.reddit.subreddit(subreddit)
@@ -32,10 +31,6 @@ class RedditClient:
             for p in sub.new(limit=limit):
                 yield Post(p.id, subreddit, "post", p.title + ' ' + (p.selftext or ''), p.created_utc, None)
                 post_count += 1
-                #get comments
-                # p.comments.replace_more(limit=0)
-                # for c in p.comments.list():
-                #     yield Post(c.id, subreddit, "comment", c.body, c.created_utc)
             #comments
             comment_count = 0
             for c in sub.comments(limit=200):
