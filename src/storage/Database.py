@@ -1,4 +1,3 @@
-import sqlite3
 from datetime import datetime
 import sys
 from pathlib import Path
@@ -160,3 +159,7 @@ def fetch_popular_tickers(db_url: str, start_date: datetime, end_date: datetime,
     finally:
         cursor.close()
         conn.close()
+
+def fetch_growth_tickers(db_url: str) -> dict[str, list[MentionDataPoint]]:
+
+    conn = psycopg2.connect(db_url)

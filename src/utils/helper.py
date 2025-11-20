@@ -3,14 +3,15 @@ from datetime import datetime, timedelta, timezone
 
 def parse_time_input(timeframe: str) -> timedelta:
     """Converts a string into a representative timedelta
+
     Args:
         timeframe (str): Examples include '5h', '1d', '10w'. Does not support months.
 
     Returns:
-        timedelta: A timedelta matching the duration given
+        timedelta: A timedelta matching the duration given.
     
     Raises:
-        ValueError: If the string is empty or incorrect
+        ValueError: If the string is empty or incorrect.
     """
     if not timeframe: 
         raise ValueError("Timeframe cannot be empty")
