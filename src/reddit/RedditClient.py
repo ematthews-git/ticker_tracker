@@ -53,7 +53,7 @@ class RedditClient:
                 if c.author:
                     user_id = c.author.name
                     auth_created_utc = c.author.created_utc
-                    auth_comment_karma = c.authour.comment_karma
+                    auth_comment_karma = c.author.comment_karma
                     auth_link_karma = c.author.link_karma
                 else:
                     user_id = "[DELETED]"
