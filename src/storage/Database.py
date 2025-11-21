@@ -12,18 +12,18 @@ from models import MentionDataPoint
 import logging
 logger = logging.getLogger(__name__)
 
-def insert_mention_counts(db_url, mention_data_points: list[MentionDataPoint]) -> None:
+def insert_mention_counts(connection_pool, mention_data_points: list[MentionDataPoint]) -> None:
     """Adds each MentionDataPoint to the database.
 
     Args:
-        db_url (str): The PostgreSQL connection string.
+        connection_pool: The PostgreSQL connection pool.
         mention_data_points (list[MentionDataPoint]): A list of MentionDataPoint objects to insert.
     """
     if not mention_data_points:
         return
 
-    #connect to db
-    conn = psycopg2.connect(db_url)
+    #get connection from pool
+    conn = connection_pool.getconn()
     cursor = conn.cursor()
 
     try:
@@ -53,14 +53,14 @@ def insert_mention_counts(db_url, mention_data_points: list[MentionDataPoint]) -
         raise
     finally:
         cursor.close()
-        conn.close()
+        connection_pool.putconn(conn)
     
 
-def fetch_ticker_mentions(db_url, ticker: str, start_date: datetime, end_date: datetime) -> list[MentionDataPoint]:
+def fetch_ticker_mentions(connection_pool, ticker: str, start_date: datetime, end_date: datetime) -> list[MentionDataPoint]:
     """Return a list of MentionDataPoint objects for a ticker between start_date and end_date.
 
         Args:
-            db_url (str): The PostgreSQL connection string.
+            connection_pool: The PostgreSQL connection pool.
             ticker (str): Stock ticker symbol to search for.
             start_date (datetime): Start of the date range.
             end_date (datetime): End of the date range.
@@ -69,7 +69,7 @@ def fetch_ticker_mentions(db_url, ticker: str, start_date: datetime, end_date: d
             list[MentionDataPoint]: A list of MentionDataPoint objects matching the criteria.
         """
     
-    conn = psycopg2.connect(db_url)
+    conn = connection_pool.getconn()
     cursor = conn.cursor()
 
     try:
@@ -82,7 +82,7 @@ def fetch_ticker_mentions(db_url, ticker: str, start_date: datetime, end_date: d
 
         cursor.execute(query, (ticker.upper(), start_date, end_date))
         rows = cursor.fetchall()
-
+        
         #constructs the list of mentionDataPoints 
         mention_data_points = []
         for ticker_val, subreddit, timestamp, count, unique_users, total_score, total_comments, avg_sentiment in rows:
@@ -105,13 +105,13 @@ def fetch_ticker_mentions(db_url, ticker: str, start_date: datetime, end_date: d
         raise
     finally:
         cursor.close()
-        conn.close()
+        connection_pool.putconn(conn)
     
-def fetch_popular_tickers(db_url: str, start_date: datetime, end_date: datetime, amount: int=10) -> dict[str, list[MentionDataPoint]]:
+def fetch_popular_tickers(connection_pool, start_date: datetime, end_date: datetime, amount: int=10) -> dict[str, list[MentionDataPoint]]:
     """Gets a list of the most popular tickers in a timeframe.
 
     Args:
-        db_url (str): The connection URL to the database.
+        connection_pool: The PostgreSQL connection pool.
         start_date (datetime): The start of the date range to query.
         end_date (datetime): The end of the date range to query.
         amount (int, optional): The number of tickers to be returned. Defaults to 10.
@@ -121,7 +121,7 @@ def fetch_popular_tickers(db_url: str, start_date: datetime, end_date: datetime,
                                             ordered where the first index is the most popular.
     """
 
-    conn = psycopg2.connect(db_url)
+    conn = connection_pool.getconn()
     cursor = conn.cursor()
 
     try: 
@@ -171,20 +171,20 @@ def fetch_popular_tickers(db_url: str, start_date: datetime, end_date: datetime,
         raise
     finally:
         cursor.close()
-        conn.close()
+        connection_pool.putconn(conn)
 
-def get_author_data(db_url: str, username: str) -> Optional[Tuple[float, int, int]]:
+def get_author_data(connection_pool, username: str) -> Optional[Tuple[float, int, int]]:
     """Get cached author data from database if it exists and is fresh (< 7 days old).
     
     Args:
-        db_url (str): The PostgreSQL connection string.
+        connection_pool: The PostgreSQL connection pool.
         username (str): The Reddit username to look up.
         
     Returns:
         Optional[Tuple[float, int, int]]: Tuple of (created_utc, comment_karma, link_karma) if cache hit and fresh,
                                           None if cache miss or stale.
     """
-    conn = psycopg2.connect(db_url)
+    conn = connection_pool.getconn()
     cursor = conn.cursor()
     
     try:
@@ -205,21 +205,21 @@ def get_author_data(db_url: str, username: str) -> Optional[Tuple[float, int, in
         return None
     finally:
         cursor.close()
-        conn.close()
+        connection_pool.putconn(conn)
 
 
-def upsert_author_data(db_url: str, username: str, created_utc: Optional[float], 
+def upsert_author_data(connection_pool, username: str, created_utc: Optional[float], 
                        comment_karma: Optional[int], link_karma: Optional[int]) -> None:
     """Insert or update author data in the cache.
     
     Args:
-        db_url (str): The PostgreSQL connection string.
+        connection_pool: The PostgreSQL connection pool.
         username (str): The Reddit username.
         created_utc (Optional[float]): Author account creation timestamp (Unix timestamp).
         comment_karma (Optional[int]): Author's comment karma.
         link_karma (Optional[int]): Author's link karma.
     """
-    conn = psycopg2.connect(db_url)
+    conn = connection_pool.getconn()
     cursor = conn.cursor()
     
     try:
@@ -246,9 +246,9 @@ def upsert_author_data(db_url: str, username: str, created_utc: Optional[float],
         raise
     finally:
         cursor.close()
-        conn.close()
+        connection_pool.putconn(conn)
 
 
-def fetch_growth_tickers(db_url: str) -> dict[str, list[MentionDataPoint]]:
+def fetch_growth_tickers(connection_pool) -> dict[str, list[MentionDataPoint]]:
 
-    conn = psycopg2.connect(db_url)
+    conn = connection_pool.getconn()

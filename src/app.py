@@ -15,6 +15,13 @@ import schedule
 from datetime import datetime, timezone
 import time
 from storage.Database import insert_mention_counts
+from psycopg2.pool import SimpleConnectionPool
+
+pool = SimpleConnectionPool(
+    minconn=1,
+    maxconn=10,   # you can raise this if your scraper is highly concurrent
+    dsn=DB_URL
+)
 
 def collect_data() -> None:
     """Collects ticker mentions and saves to database
@@ -23,8 +30,8 @@ def collect_data() -> None:
     logger.info(f"[{datetime.now(timezone.utc)}] starting data collection...")
     try:
         #initialise clients
-        reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT, DB_URL)
-        scanner = TickerMentionScanner(VALID)
+        reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT, pool)
+        scanner = TickerMentionScanner(VALID, pool)
 
         all_posts = []
 
@@ -42,7 +49,7 @@ def collect_data() -> None:
 
         #save mentions
         if mention_data_points:
-            insert_mention_counts(DB_URL, mention_data_points)
+            insert_mention_counts(pool, mention_data_points)
             logger.info(f"Saved {len(mention_data_points)} items to mentions database \n {'='*50}")
         else:
             logger.warning("No ticker mentions found")

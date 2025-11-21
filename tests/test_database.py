@@ -37,18 +37,18 @@ class TestInsertMentionCounts(TestDatabase):
     """Test suite for insert_mention_counts function"""
 
     @patch('storage.Database.execute_batch')
-    @patch('storage.Database.psycopg2.connect')
-    def test_inserts_single_mention(self, mock_connect, mock_execute_batch):
+    def test_inserts_single_mention(self, mock_execute_batch):
         """Test inserting a single MentionDataPoint"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
-        insert_mention_counts(self.test_db_url, [self.sample_data_point])
+        insert_mention_counts(mock_pool, [self.sample_data_point])
 
-        # Verify connection was established
-        mock_connect.assert_called_once_with(self.test_db_url)
+        # Verify connection was retrieved from pool
+        mock_pool.getconn.assert_called_once()
         mock_conn.cursor.assert_called_once()
 
         # Verify execute_batch was called with correct data
@@ -77,15 +77,15 @@ class TestInsertMentionCounts(TestDatabase):
         # Verify commit was called
         mock_conn.commit.assert_called_once()
         mock_cursor.close.assert_called_once()
-        mock_conn.close.assert_called_once()
+        mock_pool.putconn.assert_called_once_with(mock_conn)
 
     @patch('storage.Database.execute_batch')
-    @patch('storage.Database.psycopg2.connect')
-    def test_inserts_multiple_mentions(self, mock_connect, mock_execute_batch):
+    def test_inserts_multiple_mentions(self, mock_execute_batch):
         """Test inserting multiple MentionDataPoints"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
         data_points = [
@@ -102,7 +102,7 @@ class TestInsertMentionCounts(TestDatabase):
             )
         ]
 
-        insert_mention_counts(self.test_db_url, data_points)
+        insert_mention_counts(mock_pool, data_points)
 
         # Verify execute_batch was called with 2 data points
         call_args = mock_execute_batch.call_args
@@ -111,21 +111,21 @@ class TestInsertMentionCounts(TestDatabase):
         self.assertEqual(data[0][0], 'AAPL')
         self.assertEqual(data[1][0], 'TSLA')
 
-    @patch('storage.Database.psycopg2.connect')
-    def test_handles_empty_list(self, mock_connect):
+    def test_handles_empty_list(self):
         """Test that empty list returns early without database operations"""
-        insert_mention_counts(self.test_db_url, [])
+        mock_pool = MagicMock()
+        insert_mention_counts(mock_pool, [])
         
-        # Should not connect to database
-        mock_connect.assert_not_called()
+        # Should not get connection from pool
+        mock_pool.getconn.assert_not_called()
 
     @patch('storage.Database.execute_batch')
-    @patch('storage.Database.psycopg2.connect')
-    def test_uppercases_ticker(self, mock_connect, mock_execute_batch):
+    def test_uppercases_ticker(self, mock_execute_batch):
         """Test that ticker is converted to uppercase"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
         data_point = MentionDataPoint(
@@ -139,27 +139,27 @@ class TestInsertMentionCounts(TestDatabase):
             avg_sentiment=0.5
         )
 
-        insert_mention_counts(self.test_db_url, [data_point])
+        insert_mention_counts(mock_pool, [data_point])
 
         call_args = mock_execute_batch.call_args
         data = call_args[0][2]
         self.assertEqual(data[0][0], 'AAPL')  # Should be uppercase
 
     @patch('storage.Database.execute_batch')
-    @patch('storage.Database.psycopg2.connect')
     @patch('storage.Database.logger')
-    def test_handles_database_error(self, mock_logger, mock_connect, mock_execute_batch):
+    def test_handles_database_error(self, mock_logger, mock_execute_batch):
         """Test error handling when database operation fails"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
         
         # Simulate database error
         mock_execute_batch.side_effect = Exception("Database error")
 
         with self.assertRaises(Exception):
-            insert_mention_counts(self.test_db_url, [self.sample_data_point])
+            insert_mention_counts(mock_pool, [self.sample_data_point])
 
         # Verify rollback was called
         mock_conn.rollback.assert_called_once()
@@ -167,18 +167,18 @@ class TestInsertMentionCounts(TestDatabase):
         mock_logger.error.assert_called_once()
         # Verify cleanup still happens
         mock_cursor.close.assert_called_once()
-        mock_conn.close.assert_called_once()
+        mock_pool.putconn.assert_called_once_with(mock_conn)
 
 
 class TestFetchTickerMentions(TestDatabase):
     """Test suite for fetch_ticker_mentions function"""
 
-    @patch('storage.Database.psycopg2.connect')
-    def test_fetches_mentions_for_ticker(self, mock_connect):
+    def test_fetches_mentions_for_ticker(self):
         """Test fetching mentions for a specific ticker"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
         # Mock database response
@@ -190,8 +190,10 @@ class TestFetchTickerMentions(TestDatabase):
         start_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
         end_date = datetime(2025, 1, 3, tzinfo=timezone.utc)
 
-        result = fetch_ticker_mentions(self.test_db_url, 'AAPL', start_date, end_date)
+        result = fetch_ticker_mentions(mock_pool, 'AAPL', start_date, end_date)
 
+        # Verify connection was retrieved from pool
+        mock_pool.getconn.assert_called_once()
         # Verify query was executed with correct parameters
         mock_cursor.execute.assert_called_once()
         call_args = mock_cursor.execute.call_args
@@ -212,49 +214,51 @@ class TestFetchTickerMentions(TestDatabase):
         self.assertEqual(result[0].mention_count, 10)
         self.assertEqual(result[1].subreddit, 'wallstreetbets')
         self.assertEqual(result[1].mention_count, 15)
+        # Verify connection was returned to pool
+        mock_pool.putconn.assert_called_once_with(mock_conn)
 
-    @patch('storage.Database.psycopg2.connect')
-    def test_uppercases_ticker_in_query(self, mock_connect):
+    def test_uppercases_ticker_in_query(self):
         """Test that ticker is uppercased in query"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
         mock_cursor.fetchall.return_value = []
 
         start_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
         end_date = datetime(2025, 1, 3, tzinfo=timezone.utc)
 
-        fetch_ticker_mentions(self.test_db_url, 'aapl', start_date, end_date)
+        fetch_ticker_mentions(mock_pool, 'aapl', start_date, end_date)
 
         # Verify ticker was uppercased
         call_args = mock_cursor.execute.call_args
         params = call_args[0][1]
         self.assertEqual(params[0], 'AAPL')
 
-    @patch('storage.Database.psycopg2.connect')
-    def test_returns_empty_list_when_no_results(self, mock_connect):
+    def test_returns_empty_list_when_no_results(self):
         """Test that empty list is returned when no mentions found"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
         mock_cursor.fetchall.return_value = []
 
         start_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
         end_date = datetime(2025, 1, 3, tzinfo=timezone.utc)
 
-        result = fetch_ticker_mentions(self.test_db_url, 'AAPL', start_date, end_date)
+        result = fetch_ticker_mentions(mock_pool, 'AAPL', start_date, end_date)
 
         self.assertEqual(len(result), 0)
         self.assertIsInstance(result, list)
 
-    @patch('storage.Database.psycopg2.connect')
-    def test_converts_data_types_correctly(self, mock_connect):
+    def test_converts_data_types_correctly(self):
         """Test that database types are converted to Python types correctly"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
         # Mock database returning string/int/float types (as they might come from DB)
@@ -265,7 +269,7 @@ class TestFetchTickerMentions(TestDatabase):
         start_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
         end_date = datetime(2025, 1, 3, tzinfo=timezone.utc)
 
-        result = fetch_ticker_mentions(self.test_db_url, 'AAPL', start_date, end_date)
+        result = fetch_ticker_mentions(mock_pool, 'AAPL', start_date, end_date)
 
         # Verify types are converted
         self.assertEqual(result[0].mention_count, 10)
@@ -277,13 +281,13 @@ class TestFetchTickerMentions(TestDatabase):
         self.assertEqual(result[0].avg_sentiment, 0.5)
         self.assertIsInstance(result[0].avg_sentiment, float)
 
-    @patch('storage.Database.psycopg2.connect')
     @patch('storage.Database.logger')
-    def test_handles_database_error(self, mock_logger, mock_connect):
+    def test_handles_database_error(self, mock_logger):
         """Test error handling when database query fails"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
         mock_cursor.execute.side_effect = Exception("Database error")
 
@@ -291,24 +295,24 @@ class TestFetchTickerMentions(TestDatabase):
         end_date = datetime(2025, 1, 3, tzinfo=timezone.utc)
 
         with self.assertRaises(Exception):
-            fetch_ticker_mentions(self.test_db_url, 'AAPL', start_date, end_date)
+            fetch_ticker_mentions(mock_pool, 'AAPL', start_date, end_date)
 
         # Verify error was logged
         mock_logger.error.assert_called_once()
         # Verify cleanup
         mock_cursor.close.assert_called_once()
-        mock_conn.close.assert_called_once()
+        mock_pool.putconn.assert_called_once_with(mock_conn)
 
 
 class TestFetchPopularTickers(TestDatabase):
     """Test suite for fetch_popular_tickers function"""
 
-    @patch('storage.Database.psycopg2.connect')
-    def test_fetches_popular_tickers(self, mock_connect):
+    def test_fetches_popular_tickers(self):
         """Test fetching popular tickers"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
         # Mock database response - ordered by total_mentions DESC
@@ -321,8 +325,10 @@ class TestFetchPopularTickers(TestDatabase):
         start_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
         end_date = datetime(2025, 1, 3, tzinfo=timezone.utc)
 
-        result = fetch_popular_tickers(self.test_db_url, start_date, end_date, amount=2)
+        result = fetch_popular_tickers(mock_pool, start_date, end_date, amount=2)
 
+        # Verify connection was retrieved from pool
+        mock_pool.getconn.assert_called_once()
         # Verify query was executed
         mock_cursor.execute.assert_called_once()
         call_args = mock_cursor.execute.call_args
@@ -352,49 +358,51 @@ class TestFetchPopularTickers(TestDatabase):
         # Verify AAPL has 1 data point
         self.assertEqual(len(result['AAPL']), 1)
         self.assertEqual(result['AAPL'][0].mention_count, 25)
+        # Verify connection was returned to pool
+        mock_pool.putconn.assert_called_once_with(mock_conn)
 
-    @patch('storage.Database.psycopg2.connect')
-    def test_uses_default_amount(self, mock_connect):
+    def test_uses_default_amount(self):
         """Test that default amount of 10 is used when not specified"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
         mock_cursor.fetchall.return_value = []
 
         start_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
         end_date = datetime(2025, 1, 3, tzinfo=timezone.utc)
 
-        fetch_popular_tickers(self.test_db_url, start_date, end_date)
+        fetch_popular_tickers(mock_pool, start_date, end_date)
 
         # Verify default amount of 10 was used
         call_args = mock_cursor.execute.call_args
         params = call_args[0][1]
         self.assertEqual(params[2], 10)  # Default amount
 
-    @patch('storage.Database.psycopg2.connect')
-    def test_returns_empty_dict_when_no_results(self, mock_connect):
+    def test_returns_empty_dict_when_no_results(self):
         """Test that empty dict is returned when no tickers found"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
         mock_cursor.fetchall.return_value = []
 
         start_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
         end_date = datetime(2025, 1, 3, tzinfo=timezone.utc)
 
-        result = fetch_popular_tickers(self.test_db_url, start_date, end_date)
+        result = fetch_popular_tickers(mock_pool, start_date, end_date)
 
         self.assertEqual(len(result), 0)
         self.assertIsInstance(result, dict)
 
-    @patch('storage.Database.psycopg2.connect')
-    def test_groups_mentions_by_ticker(self, mock_connect):
+    def test_groups_mentions_by_ticker(self):
         """Test that mentions are properly grouped by ticker"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
 
         # Mock multiple mentions for same ticker across different subreddits/times
@@ -407,20 +415,20 @@ class TestFetchPopularTickers(TestDatabase):
         start_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
         end_date = datetime(2025, 1, 3, tzinfo=timezone.utc)
 
-        result = fetch_popular_tickers(self.test_db_url, start_date, end_date, amount=1)
+        result = fetch_popular_tickers(mock_pool, start_date, end_date, amount=1)
 
         # Should have one ticker with 3 data points
         self.assertEqual(len(result), 1)
         self.assertIn('AAPL', result)
         self.assertEqual(len(result['AAPL']), 3)
 
-    @patch('storage.Database.psycopg2.connect')
     @patch('storage.Database.logger')
-    def test_handles_database_error(self, mock_logger, mock_connect):
+    def test_handles_database_error(self, mock_logger):
         """Test error handling when database query fails"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
         mock_cursor.execute.side_effect = Exception("Database error")
 
@@ -428,28 +436,28 @@ class TestFetchPopularTickers(TestDatabase):
         end_date = datetime(2025, 1, 3, tzinfo=timezone.utc)
 
         with self.assertRaises(Exception):
-            fetch_popular_tickers(self.test_db_url, start_date, end_date)
+            fetch_popular_tickers(mock_pool, start_date, end_date)
 
         # Verify error was logged
         mock_logger.error.assert_called_once()
         # Verify cleanup
         mock_cursor.close.assert_called_once()
-        mock_conn.close.assert_called_once()
+        mock_pool.putconn.assert_called_once_with(mock_conn)
 
-    @patch('storage.Database.psycopg2.connect')
     @patch('storage.Database.logger')
-    def test_logs_debug_info(self, mock_logger, mock_connect):
+    def test_logs_debug_info(self, mock_logger):
         """Test that debug logging occurs"""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_connect.return_value = mock_conn
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_conn.cursor.return_value = mock_cursor
         mock_cursor.fetchall.return_value = []
 
         start_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
         end_date = datetime(2025, 1, 3, tzinfo=timezone.utc)
 
-        fetch_popular_tickers(self.test_db_url, start_date, end_date)
+        fetch_popular_tickers(mock_pool, start_date, end_date)
 
         # Verify debug log was called
         mock_logger.debug.assert_called_once()

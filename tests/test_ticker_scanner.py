@@ -16,7 +16,9 @@ class TestTickerMentionScanner(unittest.TestCase):
     def setUp(self) -> None:
         """Runs before each test to set up common test data"""
         self.valid_tickers = {'AAPL', 'TSLA', 'NVDA', 'GME', 'BYND'}
-        self.scanner = TickerMentionScanner(self.valid_tickers)
+        # Create a mock connection pool for tests
+        self.mock_pool = MagicMock()
+        self.scanner = TickerMentionScanner(self.valid_tickers, self.mock_pool)
         self.test_timestamp = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         # Default values for Post fields
         self.default_user_id = 'test_user'
