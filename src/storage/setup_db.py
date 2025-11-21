@@ -63,7 +63,7 @@ def create_database_postgres(db_url):
                    user_id TEXT NOT NULL,
                    score INTEGER NOT NULL,
                    num_comments INTEGER NOT NULL,
-                   author_created_utc REAL,
+                   author_created_utc TIMESTAMPTZ,
                    author_comment_karma INTEGER,
                    author_link_karma INTEGER
         );
@@ -113,7 +113,7 @@ def create_database_sqlite():
                    user_id TEXT NOT NULL,
                    score INTEGER NOT NULL,
                    num_comments INTEGER NOT NULL,
-                   author_created_utc REAL,
+                   author_created_utc DATETIME,
                    author_comment_karma INTEGER,
                    author_link_karma INTEGER
         );
