@@ -31,13 +31,17 @@ def insert_mention_counts(db_url, mention_data_points: list[MentionDataPoint]) -
             (data_point.ticker.upper(),
              data_point.subreddit,
              data_point.timestamp,
-             data_point.mention_count)
+             data_point.mention_count,
+             data_point.unique_users,
+             data_point.total_score,
+             data_point.total_comments,
+             data_point.avg_sentiment)
              for data_point in mention_data_points
         ]
 
         execute_batch(cursor, """
-            INSERT INTO mentions (ticker, subreddit, timestamp, mention_count)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO mentions (ticker, subreddit, timestamp, mention_count, unique_users, total_score, total_comments, avg_sentiment)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (ticker, subreddit, timestamp) DO NOTHING
             """, data)
         
@@ -69,7 +73,7 @@ def fetch_ticker_mentions(db_url, ticker: str, start_date: datetime, end_date: d
 
     try:
         query = """
-        SELECT ticker, subreddit, timestamp, mention_count FROM mentions
+        SELECT ticker, subreddit, timestamp, mention_count, unique_users, total_score, total_comments, avg_sentiment FROM mentions
         WHERE ticker = %s
         AND timestamp BETWEEN %s and %s
         ORDER BY timestamp
@@ -80,13 +84,17 @@ def fetch_ticker_mentions(db_url, ticker: str, start_date: datetime, end_date: d
 
         #constructs the list of mentionDataPoints 
         mention_data_points = []
-        for ticker_val, subreddit, timestamp, count in rows:
+        for ticker_val, subreddit, timestamp, count, unique_users, total_score, total_comments, avg_sentiment in rows:
             mention_data_points.append(
                 MentionDataPoint(
                     ticker=ticker_val,
                     subreddit=subreddit,
                     timestamp=timestamp,
-                    mention_count=int(count)
+                    mention_count=int(count),
+                    unique_users=int(unique_users),
+                    total_score=int(total_score),
+                    total_comments=int(total_comments),
+                    avg_sentiment=float(avg_sentiment)
                 )
             )
     
@@ -129,7 +137,7 @@ def fetch_popular_tickers(db_url: str, start_date: datetime, end_date: datetime,
                 ORDER by total_mentions DESC
                 LIMIT %s
             )
-            SELECT m.ticker, m.subreddit, m.timestamp, m.mention_count
+            SELECT m.ticker, m.subreddit, m.timestamp, m.mention_count, m.unique_users, m.total_score, m.total_comments, m.avg_sentiment
             FROM mentions m
             JOIN top_tickers t ON m.ticker = t.ticker
             WHERE m.timestamp BETWEEN %s and %s
@@ -141,12 +149,16 @@ def fetch_popular_tickers(db_url: str, start_date: datetime, end_date: datetime,
         result = dict()
 
         #construct return object
-        for ticker, subreddit, timestamp, count in rows:
+        for ticker, subreddit, timestamp, count, unique_users, total_score, total_comments, avg_sentiment in rows:
             dp = MentionDataPoint(
                 ticker=ticker,
                 subreddit=subreddit,
                 timestamp=timestamp,
-                mention_count=count
+                mention_count=int(count),
+                unique_users=int(unique_users),
+                total_score=int(total_score),
+                total_comments=int(total_comments),
+                avg_sentiment=float(avg_sentiment)
             )
             if ticker not in result:
                 result[ticker] = []

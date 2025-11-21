@@ -18,6 +18,13 @@ class TestTickerMentionScanner(unittest.TestCase):
         self.valid_tickers = {'AAPL', 'TSLA', 'NVDA', 'GME', 'BYND'}
         self.scanner = TickerMentionScanner(self.valid_tickers)
         self.test_timestamp = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        # Default values for Post fields
+        self.default_user_id = 'test_user'
+        self.default_score = 0
+        self.default_num_comments = 0
+        self.default_author_created_utc = 1000000000.0
+        self.default_author_comment_karma = 0
+        self.default_author_link_karma = 0
     
     def tearDown(self) -> None:
         """Runs after each test to before cleanup"""
@@ -31,7 +38,13 @@ class TestTickerMentionScanner(unittest.TestCase):
                     type='post', 
                     text='tim cooked AAPL!', 
                     created_utc=self.test_timestamp.timestamp(),
-                    origin_id=None
+                    origin_id=None,
+                    user_id=self.default_user_id,
+                    score=self.default_score,
+                    num_comments=self.default_num_comments,
+                    author_created_utc=self.default_author_created_utc,
+                    author_comment_karma=self.default_author_comment_karma,
+                    author_link_karma=self.default_author_link_karma
                 )
 
         #Mock database
@@ -53,7 +66,13 @@ class TestTickerMentionScanner(unittest.TestCase):
             type='comment', 
             text='AAPL, or TSLA? or NVDA.', 
             created_utc=self.test_timestamp.timestamp(),
-            origin_id=None
+            origin_id=None,
+            user_id=self.default_user_id,
+            score=self.default_score,
+            num_comments=self.default_num_comments,
+            author_created_utc=self.default_author_created_utc,
+            author_comment_karma=self.default_author_comment_karma,
+            author_link_karma=self.default_author_link_karma
         )
 
         #Mock database
@@ -78,7 +97,13 @@ class TestTickerMentionScanner(unittest.TestCase):
             type='post',
             text='AAPL is good but FAKE and INVALID are not real tickers',
             created_utc=self.test_timestamp.timestamp(),
-            origin_id=None
+            origin_id=None,
+            user_id=self.default_user_id,
+            score=self.default_score,
+            num_comments=self.default_num_comments,
+            author_created_utc=self.default_author_created_utc,
+            author_comment_karma=self.default_author_comment_karma,
+            author_link_karma=self.default_author_link_karma
         )
         
         with patch.object(self.scanner, '_get_existing_posts_ids', return_value=set()):
@@ -98,7 +123,13 @@ class TestTickerMentionScanner(unittest.TestCase):
             type='post',
             text='AAPL AAPL AAPL to the moon! AAPL is the best!',
             created_utc=self.test_timestamp.timestamp(),
-            origin_id=None
+            origin_id=None,
+            user_id=self.default_user_id,
+            score=self.default_score,
+            num_comments=self.default_num_comments,
+            author_created_utc=self.default_author_created_utc,
+            author_comment_karma=self.default_author_comment_karma,
+            author_link_karma=self.default_author_link_karma
         )
         
         with patch.object(self.scanner, '_get_existing_posts_ids', return_value=set()):
@@ -113,11 +144,20 @@ class TestTickerMentionScanner(unittest.TestCase):
         """Test that mentions are aggregated correctly across multiple posts"""
         posts = [
             Post('test5a', 'pennystocks', 'post', 'AAPL is great', 
-                 self.test_timestamp.timestamp(), None),
+                 self.test_timestamp.timestamp(), None, self.default_user_id,
+                 self.default_score, self.default_num_comments,
+                 self.default_author_created_utc, self.default_author_comment_karma,
+                 self.default_author_link_karma),
             Post('test5b', 'pennystocks', 'post', 'I love AAPL too!', 
-                 self.test_timestamp.timestamp(), None),
+                 self.test_timestamp.timestamp(), None, self.default_user_id,
+                 self.default_score, self.default_num_comments,
+                 self.default_author_created_utc, self.default_author_comment_karma,
+                 self.default_author_link_karma),
             Post('test5c', 'pennystocks', 'comment', 'AAPL AAPL, NVDA?', 
-                 self.test_timestamp.timestamp(), None)
+                 self.test_timestamp.timestamp(), None, self.default_user_id,
+                 self.default_score, self.default_num_comments,
+                 self.default_author_created_utc, self.default_author_comment_karma,
+                 self.default_author_link_karma)
         ]
         
         with patch.object(self.scanner, '_get_existing_posts_ids', return_value=set()):
@@ -140,9 +180,15 @@ class TestTickerMentionScanner(unittest.TestCase):
         """Test that mentions in different subreddits create seperate MentionDataPoints"""
         posts = [
             Post('test6a', 'pennystocks', 'post', 'AAPL', 
-                 self.test_timestamp.timestamp(), None),
+                 self.test_timestamp.timestamp(), None, self.default_user_id,
+                 self.default_score, self.default_num_comments,
+                 self.default_author_created_utc, self.default_author_comment_karma,
+                 self.default_author_link_karma),
             Post('test6b', 'wallstreetbets', 'post', 'AAPL AAPL', 
-                 self.test_timestamp.timestamp(), None)
+                 self.test_timestamp.timestamp(), None, self.default_user_id,
+                 self.default_score, self.default_num_comments,
+                 self.default_author_created_utc, self.default_author_comment_karma,
+                 self.default_author_link_karma)
         ]
         
         with patch.object(self.scanner, '_get_existing_posts_ids', return_value=set()):
@@ -164,9 +210,15 @@ class TestTickerMentionScanner(unittest.TestCase):
         """Test that previously processed posts are skipped"""
         posts = [
             Post('existing1', 'pennystocks', 'post', 'AAPL', 
-                 self.test_timestamp.timestamp(), None),
+                 self.test_timestamp.timestamp(), None, self.default_user_id,
+                 self.default_score, self.default_num_comments,
+                 self.default_author_created_utc, self.default_author_comment_karma,
+                 self.default_author_link_karma),
             Post('new1', 'pennystocks', 'post', 'TSLA', 
-                 self.test_timestamp.timestamp(), None)
+                 self.test_timestamp.timestamp(), None, self.default_user_id,
+                 self.default_score, self.default_num_comments,
+                 self.default_author_created_utc, self.default_author_comment_karma,
+                 self.default_author_link_karma)
         ]
         
         # Mock that 'existing1' is already in database
@@ -202,7 +254,13 @@ class TestTickerMentionScanner(unittest.TestCase):
             type='post',
             text='I think aapl is good but TSLA is better',
             created_utc=self.test_timestamp.timestamp(),
-            origin_id=None
+            origin_id=None,
+            user_id=self.default_user_id,
+            score=self.default_score,
+            num_comments=self.default_num_comments,
+            author_created_utc=self.default_author_created_utc,
+            author_comment_karma=self.default_author_comment_karma,
+            author_link_karma=self.default_author_link_karma
         )
         
         with patch.object(self.scanner, '_get_existing_posts_ids', return_value=set()):

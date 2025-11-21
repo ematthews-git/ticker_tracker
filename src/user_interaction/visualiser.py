@@ -42,18 +42,23 @@ class Visualiser:
                 }
                 for point in plot_points
             ])
-
+            #add points
             for sub in SUBREDDITS:
                 sub_data = df[df['subreddit'] == sub]
                 plt.plot(sub_data['timestamp'], sub_data['mention_count'], label=sub)
-                
+
+            #Add cumulative line
+            cumulative = df.groupby('timestamp')['mention_count'].sum().reset_index()
+            plt.plot(cumulative['timestamp'], cumulative['mention_count'], 
+                     label = 'Total', linestyle='--')
+
+            #plot
             plt.title(f"""{ticker.upper()} mentions from 
                     {start_time.replace(microsecond=0, second=0, minute=0)} to {now.replace(microsecond=0, second=0, minute=0)}""")
             plt.legend()
             plt.grid(True)
             plt.tight_layout()
             plt.show()
-
         except Exception as e:
             print(f"[ERROR] error with graphing ticker: {e}")
 
