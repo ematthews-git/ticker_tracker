@@ -15,10 +15,10 @@ from storage.Database import get_author_data, upsert_author_data
 class RedditClient:
     """Establishes a connection with the reddit api and communicates with the reddit API.
     """
-    def __init__(self, client_id, client_secret, user_agent, db_url: Optional[str] = None):
+    def __init__(self, client_id, client_secret, user_agent, connection_pool=None):
         self.reddit = praw.Reddit(client_id=client_id, client_secret=client_secret,
                                   user_agent = user_agent)
-        self.db_url = db_url
+        self.connection_pool = connection_pool
         logger.info("Reddit client initialized")
     
     def _get_author_data_from_cache_or_api(self, author, authors_to_cache: List) -> Tuple[str, Optional[float], Optional[int], Optional[int]]:
@@ -38,15 +38,15 @@ class RedditClient:
         
         username = author.name
         
-        # Try to get from cache if db_url is provided
-        if self.db_url:
-            cached_data = get_author_data(self.db_url, username)
+        # Try to get from cache if connection_pool is provided
+        if self.connection_pool:
+            cached_data = get_author_data(self.connection_pool, username)
             if cached_data is not None:
                 logger.debug(f"Cache hit for author: {username}")
                 created_utc, comment_karma, link_karma = cached_data
                 return (username, created_utc, comment_karma, link_karma)
         
-        # Cache miss or no db_url - fetch from Reddit API
+        # Cache miss or no connection_pool - fetch from Reddit API
         logger.debug(f"Cache miss for author: {username}, fetching from API")
         try:
             created_utc = author.created_utc
@@ -54,7 +54,7 @@ class RedditClient:
             link_karma = author.link_karma
             
             # Collect for batch insert instead of inserting immediately
-            if self.db_url:
+            if self.connection_pool:
                 authors_to_cache.append((username, created_utc, comment_karma, link_karma))
             
             return (username, created_utc, comment_karma, link_karma)
@@ -64,20 +64,17 @@ class RedditClient:
             return (username, None, None, None)
     
     def _batch_upsert_authors(self, authors_to_cache: List[Tuple[str, Optional[float], Optional[int], Optional[int]]]) -> None:
-        """Batch insert/update author data to cache using existing connection pattern.
+        """Batch insert/update author data to cache using connection pool.
         
         Args:
             authors_to_cache: List of tuples (username, created_utc, comment_karma, link_karma)
         """
-        if not authors_to_cache or not self.db_url:
+        if not authors_to_cache or not self.connection_pool:
             return
         
-        # Use the existing upsert_author_data function which handles its own connection
-        # This keeps the same connection logic but batches the actual inserts
-        import psycopg2
         from psycopg2.extras import execute_batch
         
-        conn = psycopg2.connect(self.db_url)
+        conn = self.connection_pool.getconn()
         cursor = conn.cursor()
         
         try:
@@ -106,7 +103,7 @@ class RedditClient:
             logger.error(f"Error batch upserting authors: {e}")
         finally:
             cursor.close()
-            conn.close()
+            self.connection_pool.putconn(conn)
     
     def fetch_recent_posts(self, subreddit: str, limit: int =200):
         """Yields recent posts and comments from subreddit

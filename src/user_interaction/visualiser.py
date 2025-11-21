@@ -13,11 +13,20 @@ from config import DB_URL, SUBREDDITS
 from models import MentionDataPoint
 from storage import Database
 from utils import helper
+from psycopg2.pool import SimpleConnectionPool
 
 class Visualiser:
     """The visualiser communicates with the database to visualise basic information"""
-    def __init__(self) -> None:
-        pass
+    def __init__(self, connection_pool=None) -> None:
+        if connection_pool is None:
+            # Create a pool if one isn't provided
+            self.connection_pool = SimpleConnectionPool(
+                minconn=1,
+                maxconn=5,
+                dsn=DB_URL
+            )
+        else:
+            self.connection_pool = connection_pool
 
     def graph_ticker(self, ticker: str):
         try:
@@ -31,7 +40,7 @@ class Visualiser:
                 print(f"Timeframe formatted incorrectly: {e}")
                 return
 
-            plot_points = list(Database.fetch_ticker_mentions(DB_URL, ticker, start_time, now))
+            plot_points = list(Database.fetch_ticker_mentions(self.connection_pool, ticker, start_time, now))
 
             #Convert to dataframe
             df = pd.DataFrame([
@@ -48,9 +57,9 @@ class Visualiser:
                 plt.plot(sub_data['timestamp'], sub_data['mention_count'], label=sub)
 
             #Add cumulative line
-            cumulative = df.groupby('timestamp')['mention_count'].sum().reset_index()
-            plt.plot(cumulative['timestamp'], cumulative['mention_count'], 
-                     label = 'Total', linestyle='--')
+            # cumulative = df.groupby('timestamp')['mention_count'].sum().reset_index()
+            # plt.plot(cumulative['timestamp'], cumulative['mention_count'], 
+            #          label = 'Total', linestyle='--')
 
             #plot
             plt.title(f"""{ticker.upper()} mentions from 
@@ -78,7 +87,7 @@ class Visualiser:
         if amount > 30: amount = 30
         elif amount < 10: amount = 10
 
-        popular_tickers = Database.fetch_popular_tickers(DB_URL, start_time, now, amount)
+        popular_tickers = Database.fetch_popular_tickers(self.connection_pool, start_time, now, amount)
 
         #displaying
         for ticker, points in popular_tickers.items():

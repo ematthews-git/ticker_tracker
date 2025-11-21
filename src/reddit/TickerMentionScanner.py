@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 # Add parent directory to path to import config and models
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import DB_URL
 from models import Post, MentionDataPoint
 
 import logging
@@ -18,13 +17,14 @@ logger = logging.getLogger(__name__)
 class TickerMentionScanner:
     """Scans for Ticker Mentions and saves posts to database.
     """
-    def __init__(self, valid_tickers):
+    def __init__(self, valid_tickers, connection_pool=None):
         """
         Args:
             valid_tickers: List of ticker symbols to search for
+            connection_pool: The PostgreSQL connection pool (optional)
         """
         self.valid = set(valid_tickers)
-        self.db_url = DB_URL
+        self.connection_pool = connection_pool
 
     def save_post(self, post: Post) -> None:
         """Saves one post to the posts table of database.
@@ -32,7 +32,10 @@ class TickerMentionScanner:
         Args:
             post (Post): An instance of the Post dataclass.
         """
-        conn = psycopg2.connect(self.db_url)
+        if not self.connection_pool:
+            raise ValueError("Connection pool is required to save posts")
+        
+        conn = self.connection_pool.getconn()
         cursor = conn.cursor()
 
         try:
@@ -55,7 +58,7 @@ class TickerMentionScanner:
             logger.error(f"Error saving post {post.id}: {e}")
         finally:
             cursor.close()
-            conn.close()
+            self.connection_pool.putconn(conn)
 
     def _batch_save_posts(self, posts_data: list[tuple]) -> None:
         """Batch saves multiple posts to the database in a single transaction.
@@ -65,8 +68,11 @@ class TickerMentionScanner:
         """
         if not posts_data:
             return
+        
+        if not self.connection_pool:
+            raise ValueError("Connection pool is required to save posts")
 
-        conn = psycopg2.connect(self.db_url)
+        conn = self.connection_pool.getconn()
         cursor = conn.cursor()
 
         try:
@@ -83,7 +89,7 @@ class TickerMentionScanner:
             raise
         finally:
             cursor.close()
-            conn.close()
+            self.connection_pool.putconn(conn)
     
     #Counts mentions of valid tickers into list of MentionDataPoint objects
     def process_mentions(self, post_list: list[Post]) -> list[MentionDataPoint]:
@@ -173,7 +179,10 @@ class TickerMentionScanner:
         Returns:
             set: all post IDs
         """
-        conn = psycopg2.connect(self.db_url)
+        if not self.connection_pool:
+            raise ValueError("Connection pool is required to get existing posts")
+        
+        conn = self.connection_pool.getconn()
         cursor = conn.cursor()
 
         try:
@@ -182,4 +191,4 @@ class TickerMentionScanner:
             return existing_ids
         finally:
             cursor.close()
-            conn.close()
+            self.connection_pool.putconn(conn)
