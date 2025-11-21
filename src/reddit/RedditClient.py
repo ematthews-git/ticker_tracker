@@ -29,12 +29,43 @@ class RedditClient:
             sub = self.reddit.subreddit(subreddit)
             post_count = 0
             for p in sub.new(limit=limit):
-                yield Post(p.id, subreddit, "post", p.title + ' ' + (p.selftext or ''), p.created_utc, None)
+                if p.author:
+                    user_id = p.author.name
+                    auth_created_utc = p.author.created_utc
+                    auth_comment_karma = p.author.comment_karma
+                    auth_link_karma = p.author.link_karma
+                else:
+                    user_id = "[DELETED]"
+                    auth_created_utc = None
+                    auth_comment_karma = None
+                    auth_link_karma = None
+                
+                yield Post(
+                    p.id, subreddit, "post", p.title + ' ' + (p.selftext or ''), p.created_utc, None, user_id, 
+                    p.score, p.num_comments,
+                    auth_created_utc, auth_comment_karma, auth_link_karma
+                )
+                
                 post_count += 1
             #comments
             comment_count = 0
             for c in sub.comments(limit=200):
-                yield Post(c.id, subreddit, "comment", c.body, c.created_utc, c.submission.id)
+                if c.author:
+                    user_id = c.author.name
+                    auth_created_utc = c.author.created_utc
+                    auth_comment_karma = c.authour.comment_karma
+                    auth_link_karma = c.author.link_karma
+                else:
+                    user_id = "[DELETED]"
+                    auth_created_utc = None
+                    auth_comment_karma = None
+                    auth_link_karma = None
+            
+                yield Post(
+                    c.id, subreddit, "comment", c.body, c.created_utc, c.submission.id, user_id,
+                    c.score, 0,
+                    auth_created_utc, auth_comment_karma, auth_link_karma
+                )
                 comment_count += 1
             
             logger.debug(f"Fetched {post_count} posts and {comment_count} comments from r/{subreddit}")

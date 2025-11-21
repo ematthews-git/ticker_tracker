@@ -37,4 +37,5 @@ def parse_time_input(timeframe: str) -> timedelta:
         return timedelta(weeks=amount)
     else:
         raise ValueError("Unkown unit. Use 'h', 'd' or 'w'.")
+
         

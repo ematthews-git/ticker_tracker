@@ -39,10 +39,11 @@ class TickerMentionScanner:
             # Convert Unix timestamp to datetime (UTC)
             created_dt = datetime.fromtimestamp(post.created_utc, tz=timezone.utc)
             cursor.execute("""
-                INSERT INTO posts (post_id, subreddit, created_utc, text, type, origin_id)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO posts (post_id, subreddit, created_utc, text, type, origin_id, user_id, score, num_comments, author_created_utc, author_comment_karma, author_link_karma)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (post_id) DO NOTHING
-                """, (post.id, post.subreddit, created_dt, post.text, post.type, post.origin_id))
+                """, (post.id, post.subreddit, created_dt, post.text, post.type, post.origin_id, post.user_id, 
+                      post.score, post.num_comments, post.author_created_utc, post.author_comment_karma, post.author_link_karma))
         
             conn.commit()
         except Exception as e:
@@ -56,7 +57,7 @@ class TickerMentionScanner:
         """Batch saves multiple posts to the database in a single transaction.
         
         Args:
-            posts_data: List of tuples (post_id, subreddit, created_utc, text, type, origin_id)
+            posts_data: List of tuples (post_id, subreddit, created_utc, text, type, origin_id, user_id, score, num_comments, author_created_utc, author_comment_karma, author_link_karma)
         """
         if not posts_data:
             return
@@ -66,8 +67,8 @@ class TickerMentionScanner:
 
         try:
             execute_batch(cursor, """
-                INSERT INTO posts (post_id, subreddit, created_utc, text, type, origin_id)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO posts (post_id, subreddit, created_utc, text, type, origin_id, user_id, score, num_comments, author_created_utc, author_comment_karma, author_link_karma)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (post_id) DO NOTHING
                 """, posts_data)
             
@@ -109,7 +110,8 @@ class TickerMentionScanner:
 
             # Convert Unix timestamp to datetime for batch insert (UTC)
             created_dt = datetime.fromtimestamp(post.created_utc, tz=timezone.utc)
-            new_posts.append((post.id, post.subreddit, created_dt, post.text, post.type, post.origin_id))
+            new_posts.append((post.id, post.subreddit, created_dt, post.text, post.type, post.origin_id, post.user_id,
+                             post.score, post.num_comments, post.author_created_utc, post.author_comment_karma, post.author_link_karma))
             posts_to_process.append(post)
 
         # Batch insert all new posts at once
@@ -118,25 +120,42 @@ class TickerMentionScanner:
             logger.info(f"{len(new_posts)} New posts saved to database")
 
         # Process ticker mentions for new posts
+        # Track detailed metrics per ticker-subreddit combination
+        mention_data = {}  # key: (ticker, subreddit) -> {count, users, total_score, total_comments}
+        
         for post in posts_to_process:
             #find ticker mentions
             tickers = re.findall(r'\b[A-Z]{2,5}\b', post.text) #captal letters + 2 to 5 characters
             for t in tickers:
                 if t in self.valid:
                     key = (t.upper(), post.subreddit)
-                    counts[key] = counts.get(key, 0) + 1 #existing val += 1
+                    if key not in mention_data:
+                        mention_data[key] = {
+                            'count': 0,
+                            'users': set(),
+                            'total_score': 0,
+                            'total_comments': 0
+                        }
+                    mention_data[key]['count'] += 1
+                    mention_data[key]['users'].add(post.user_id)
+                    mention_data[key]['total_score'] += post.score
+                    mention_data[key]['total_comments'] += post.num_comments
             
         logger.info(f"{len(posts_to_process)} New posts processed")
         
-        # Convert counts dictionary to list of MentionDataPoint objects
+        # Convert mention_data dictionary to list of MentionDataPoint objects
         mention_data_points = [
             MentionDataPoint(
                 ticker=ticker,
                 subreddit=subreddit,
                 timestamp=timestamp,
-                mention_count=count
+                mention_count=data['count'],
+                unique_users=len(data['users']),
+                total_score=data['total_score'],
+                total_comments=data['total_comments'],
+                avg_sentiment=0.0  # Placeholder - sentiment analysis not yet implemented
             )
-            for (ticker, subreddit), count in counts.items()
+            for (ticker, subreddit), data in mention_data.items()
         ]
         
         return mention_data_points

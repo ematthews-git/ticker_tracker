@@ -22,6 +22,10 @@ def create_database_postgres(db_url):
                    subreddit TEXT NOT NULL,
                    timestamp TIMESTAMPTZ NOT NULL,
                    mention_count INTEGER NOT NULL,
+                   unique_users INTEGER NOT NULL,
+                   total_score INTEGER NOT NULL,
+                   total_comments INTEGER NOT NULL,
+                   avg_sentiment REAL NOT NULL,
                    PRIMARY KEY (ticker, subreddit, timestamp)
         );
         """)
@@ -54,7 +58,14 @@ def create_database_postgres(db_url):
                    subreddit TEXT NOT NULL,
                    created_utc TIMESTAMPTZ NOT NULL,
                    text TEXT NOT NULL,
-                   type TEXT NOT NULL
+                   type TEXT NOT NULL,
+                   origin_id TEXT,
+                   user_id TEXT NOT NULL,
+                   score INTEGER NOT NULL,
+                   num_comments INTEGER NOT NULL,
+                   author_created_utc REAL,
+                   author_comment_karma INTEGER,
+                   author_link_karma INTEGER
         );
     """)
     
@@ -83,6 +94,10 @@ def create_database_sqlite():
                    subreddit TEXT NOT NULL,
                    timestamp DATETIME NOT NULL,
                    mention_count INTEGER NOT NULL,
+                   unique_users INTEGER NOT NULL,
+                   total_score INTEGER NOT NULL,
+                   total_comments INTEGER NOT NULL,
+                   avg_sentiment REAL NOT NULL,
                    PRIMARY KEY (ticker, subreddit, timestamp)
         );
     """)
@@ -93,7 +108,14 @@ def create_database_sqlite():
                    subreddit TEXT NOT NULL,
                    created_utc DATETIME NOT NULL,
                    text TEXT NOT NULL,
-                   type TEXT NOT NULL
+                   type TEXT NOT NULL,
+                   origin_id TEXT,
+                   user_id TEXT NOT NULL,
+                   score INTEGER NOT NULL,
+                   num_comments INTEGER NOT NULL,
+                   author_created_utc REAL,
+                   author_comment_karma INTEGER,
+                   author_link_karma INTEGER
         );
     """)
 
