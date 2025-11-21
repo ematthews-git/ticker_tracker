@@ -23,7 +23,7 @@ def collect_data() -> None:
     logger.info(f"[{datetime.now(timezone.utc)}] starting data collection...")
     try:
         #initialise clients
-        reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT)
+        reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT, DB_URL)
         scanner = TickerMentionScanner(VALID)
 
         all_posts = []
