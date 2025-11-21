@@ -74,6 +74,22 @@ def create_database_postgres(db_url):
         ON posts(subreddit);
     """)
 
+    #authors table for caching Reddit author data
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS authors (
+                   username TEXT PRIMARY KEY,
+                   created_utc TIMESTAMPTZ,
+                   comment_karma INTEGER,
+                   link_karma INTEGER,
+                   last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_authors_last_updated 
+        ON authors(last_updated DESC);
+    """)
+
     conn.commit()
     cursor.close()
     conn.close()
@@ -117,6 +133,22 @@ def create_database_sqlite():
                    author_comment_karma INTEGER,
                    author_link_karma INTEGER
         );
+    """)
+
+    #authors table for caching Reddit author data
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS authors (
+                   username TEXT PRIMARY KEY,
+                   created_utc DATETIME,
+                   comment_karma INTEGER,
+                   link_karma INTEGER,
+                   last_updated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_authors_last_updated 
+        ON authors(last_updated DESC);
     """)
 
     conn.commit()

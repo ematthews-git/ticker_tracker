@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import sys
 from pathlib import Path
 import psycopg2
 from psycopg2.extras import execute_batch
+from typing import Optional, Tuple
 
 # Add parent directory to path to import models
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -171,6 +172,82 @@ def fetch_popular_tickers(db_url: str, start_date: datetime, end_date: datetime,
     finally:
         cursor.close()
         conn.close()
+
+def get_author_data(db_url: str, username: str) -> Optional[Tuple[float, int, int]]:
+    """Get cached author data from database if it exists and is fresh (< 7 days old).
+    
+    Args:
+        db_url (str): The PostgreSQL connection string.
+        username (str): The Reddit username to look up.
+        
+    Returns:
+        Optional[Tuple[float, int, int]]: Tuple of (created_utc, comment_karma, link_karma) if cache hit and fresh,
+                                          None if cache miss or stale.
+    """
+    conn = psycopg2.connect(db_url)
+    cursor = conn.cursor()
+    
+    try:
+        # Check if author exists and cache is less than 7 days old
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        cursor.execute("""
+            SELECT created_utc, comment_karma, link_karma
+            FROM authors
+            WHERE username = %s AND last_updated >= %s
+        """, (username, seven_days_ago))
+        
+        row = cursor.fetchone()
+        if row:
+            return (row[0].timestamp() if row[0] else None, row[1], row[2])
+        return None
+    except Exception as e:
+        logger.error(f"Error getting author data for {username}: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def upsert_author_data(db_url: str, username: str, created_utc: Optional[float], 
+                       comment_karma: Optional[int], link_karma: Optional[int]) -> None:
+    """Insert or update author data in the cache.
+    
+    Args:
+        db_url (str): The PostgreSQL connection string.
+        username (str): The Reddit username.
+        created_utc (Optional[float]): Author account creation timestamp (Unix timestamp).
+        comment_karma (Optional[int]): Author's comment karma.
+        link_karma (Optional[int]): Author's link karma.
+    """
+    conn = psycopg2.connect(db_url)
+    cursor = conn.cursor()
+    
+    try:
+        # Convert Unix timestamp to datetime if provided
+        created_dt = None
+        if created_utc is not None:
+            created_dt = datetime.fromtimestamp(created_utc, tz=timezone.utc)
+        
+        cursor.execute("""
+            INSERT INTO authors (username, created_utc, comment_karma, link_karma, last_updated)
+            VALUES (%s, %s, %s, %s, NOW())
+            ON CONFLICT (username) 
+            DO UPDATE SET 
+                created_utc = EXCLUDED.created_utc,
+                comment_karma = EXCLUDED.comment_karma,
+                link_karma = EXCLUDED.link_karma,
+                last_updated = NOW()
+        """, (username, created_dt, comment_karma, link_karma))
+        
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error upserting author data for {username}: {e}")
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
 
 def fetch_growth_tickers(db_url: str) -> dict[str, list[MentionDataPoint]]:
 
