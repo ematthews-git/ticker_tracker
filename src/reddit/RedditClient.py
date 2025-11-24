@@ -1,7 +1,7 @@
 import praw 
-from models import Post
+from models import Post, Author
 from datetime import datetime, timezone
-from typing import Optional, Tuple, List
+from typing import Optional, List
 
 import logging
 logger = logging.getLogger(__name__)
@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from storage.Database import get_author_data, upsert_author_data
+from utils.helper import convert_unix_to_datetime_utc
 
 class RedditClient:
     """Establishes a connection with the reddit api and communicates with the reddit API.
@@ -21,53 +22,69 @@ class RedditClient:
         self.connection_pool = connection_pool
         logger.info("Reddit client initialized")
     
-    def _get_author_data_from_cache_or_api(self, author, authors_to_cache: List) -> Tuple[str, Optional[float], Optional[int], Optional[int]]:
+    def _get_author_data_from_cache_or_api(self, author, authors_to_cache: List[Author]) -> Author:
         """Get author data from cache or Reddit API.
         
         Args:
             author: PRAW author object (can be None for deleted users)
-            authors_to_cache: List to collect authors that need to be cached (fetched from API)
+            authors_to_cache: List to collect Author objects that need to be cached (fetched from API)
             
         Returns:
-            Tuple[str, Optional[float], Optional[int], Optional[int]]: 
-                (user_id, created_utc, comment_karma, link_karma)
+            Author: Author object (with username="[DELETED]" for deleted users)
         """
         # Handle deleted users
         if author is None:
-            return ("[DELETED]", None, None, None)
+            return Author.deleted()
         
         username = author.name
         
         # Try to get from cache if connection_pool is provided
         if self.connection_pool:
-            cached_data = get_author_data(self.connection_pool, username)
-            if cached_data is not None:
+            cached_author = get_author_data(self.connection_pool, username)
+            if cached_author is not None:
                 logger.debug(f"Cache hit for author: {username}")
-                created_utc, comment_karma, link_karma = cached_data
-                return (username, created_utc, comment_karma, link_karma)
+                return cached_author
         
         # Cache miss or no connection_pool - fetch from Reddit API
         logger.debug(f"Cache miss for author: {username}, fetching from API")
         try:
-            created_utc = author.created_utc
+            created_utc_float = author.created_utc
             comment_karma = author.comment_karma
             link_karma = author.link_karma
             
+            # Convert Unix timestamp to datetime
+            created_utc_dt = convert_unix_to_datetime_utc(created_utc_float)
+            
+            # Create Author object
+            author_obj = Author(
+                username=username,
+                created_utc=created_utc_dt,
+                comment_karma=comment_karma if comment_karma is not None else 0,
+                link_karma=link_karma if link_karma is not None else 0,
+                last_updated=datetime.now(timezone.utc)
+            )
+            
             # Collect for batch insert instead of inserting immediately
             if self.connection_pool:
-                authors_to_cache.append((username, created_utc, comment_karma, link_karma))
+                authors_to_cache.append(author_obj)
             
-            return (username, created_utc, comment_karma, link_karma)
+            return author_obj
         except Exception as e:
             logger.warning(f"Error fetching author data for {username}: {e}")
-            # Return None values if API call fails
-            return (username, None, None, None)
+            # Return Author object with default values if API call fails
+            return Author(
+                username=username,
+                created_utc=datetime.fromtimestamp(0, tz=timezone.utc),
+                comment_karma=0,
+                link_karma=0,
+                last_updated=datetime.now(timezone.utc)
+            )
     
-    def _batch_upsert_authors(self, authors_to_cache: List[Tuple[str, Optional[float], Optional[int], Optional[int]]]) -> None:
+    def _batch_upsert_authors(self, authors_to_cache: List[Author]) -> None:
         """Batch insert/update author data to cache using connection pool.
         
         Args:
-            authors_to_cache: List of tuples (username, created_utc, comment_karma, link_karma)
+            authors_to_cache: List of Author objects to cache
         """
         if not authors_to_cache or not self.connection_pool:
             return
@@ -79,11 +96,8 @@ class RedditClient:
         
         try:
             data = []
-            for username, created_utc, comment_karma, link_karma in authors_to_cache:
-                created_dt = None
-                if created_utc is not None:
-                    created_dt = datetime.fromtimestamp(created_utc, tz=timezone.utc)
-                data.append((username, created_dt, comment_karma, link_karma))
+            for author in authors_to_cache:
+                data.append((author.username, author.created_utc, author.comment_karma, author.link_karma))
             
             execute_batch(cursor, """
                 INSERT INTO authors (username, created_utc, comment_karma, link_karma, last_updated)
@@ -115,7 +129,7 @@ class RedditClient:
         Yields:
             Post: a post dataclass instance representing an entry from the subreddit.
         """
-        authors_to_cache = []  # Collect authors fetched from API for batch insert
+        authors_to_cache = []  # Collect Author objects fetched from API for batch insert
         
         try:
             logger.debug(f"Fetching {limit} recent posts from r/{subreddit}")
@@ -124,13 +138,19 @@ class RedditClient:
             post_count = 0
             for p in sub.new(limit=limit):
                 #get user info for post
-                user_id, auth_created_utc, auth_comment_karma, auth_link_karma = \
-                    self._get_author_data_from_cache_or_api(p.author, authors_to_cache)
+                author_obj = self._get_author_data_from_cache_or_api(p.author, authors_to_cache)
                 
                 yield Post(
-                    p.id, subreddit, "post", p.title + ' ' + (p.selftext or ''), p.created_utc, None, user_id, 
-                    p.score, p.num_comments,
-                    auth_created_utc, auth_comment_karma, auth_link_karma
+                    id=p.id, 
+                    subreddit=subreddit, 
+                    type="post", 
+                    text=p.title + ' ' + (p.selftext or ''), 
+                    created_utc=p.created_utc, 
+                    origin_id=None, 
+                    user_id=author_obj.username, 
+                    score=p.score, 
+                    num_comments=p.num_comments,
+                    author_quality=None
                 )
                 
                 post_count += 1
@@ -138,13 +158,19 @@ class RedditClient:
             comment_count = 0
             for c in sub.comments(limit=200):
                 #get user info for comments
-                user_id, auth_created_utc, auth_comment_karma, auth_link_karma = \
-                    self._get_author_data_from_cache_or_api(c.author, authors_to_cache)
+                author_obj = self._get_author_data_from_cache_or_api(c.author, authors_to_cache)
             
                 yield Post(
-                    c.id, subreddit, "comment", c.body, c.created_utc, c.submission.id, user_id,
-                    c.score, 0,
-                    auth_created_utc, auth_comment_karma, auth_link_karma
+                    id=c.id, 
+                    subreddit=subreddit, 
+                    type="comment", 
+                    text=c.body, 
+                    created_utc=c.created_utc, 
+                    origin_id=c.submission.id, 
+                    user_id=author_obj.username,
+                    score=c.score, 
+                    num_comments=0,
+                    author_quality=None
                 )
                 comment_count += 1
             
@@ -153,11 +179,10 @@ class RedditClient:
                 # Remove duplicates (same author might appear in both posts and comments)
                 seen = set()
                 unique_authors = []
-                for author_data in authors_to_cache:
-                    username = author_data[0]
-                    if username not in seen:
-                        seen.add(username)
-                        unique_authors.append(author_data)
+                for author in authors_to_cache:
+                    if author.username not in seen:
+                        seen.add(author.username)
+                        unique_authors.append(author)
                 
                 self._batch_upsert_authors(unique_authors)
             
