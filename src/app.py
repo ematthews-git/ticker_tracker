@@ -19,7 +19,7 @@ from psycopg2.pool import SimpleConnectionPool
 
 pool = SimpleConnectionPool(
     minconn=1,
-    maxconn=10,   # you can raise this if your scraper is highly concurrent
+    maxconn=10,   
     dsn=DB_URL
 )
 
