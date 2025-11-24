@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 # Add parent directory to path to import models
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models import MentionDataPoint
+from models import MentionDataPoint, Author
 import logging
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ def fetch_popular_tickers(connection_pool, start_date: datetime, end_date: datet
         cursor.close()
         connection_pool.putconn(conn)
 
-def get_author_data(connection_pool, username: str) -> Optional[Tuple[float, int, int]]:
+def get_author_data(connection_pool, username: str) -> Optional[Author]:
     """Get cached author data from database if it exists and is fresh (< 7 days old).
     
     Args:
@@ -181,8 +181,7 @@ def get_author_data(connection_pool, username: str) -> Optional[Tuple[float, int
         username (str): The Reddit username to look up.
         
     Returns:
-        Optional[Tuple[float, int, int]]: Tuple of (created_utc, comment_karma, link_karma) if cache hit and fresh,
-                                          None if cache miss or stale.
+        Optional[Author]: Author object if cache hit and fresh, None if cache miss or stale.
     """
     conn = connection_pool.getconn()
     cursor = conn.cursor()
@@ -191,14 +190,27 @@ def get_author_data(connection_pool, username: str) -> Optional[Tuple[float, int
         # Check if author exists and cache is less than 7 days old
         seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
         cursor.execute("""
-            SELECT created_utc, comment_karma, link_karma
+            SELECT username, created_utc, comment_karma, link_karma, last_updated
             FROM authors
             WHERE username = %s AND last_updated >= %s
         """, (username, seven_days_ago))
         
         row = cursor.fetchone()
         if row:
-            return (row[0].timestamp() if row[0] else None, row[1], row[2])
+            username_val, created_utc_dt, comment_karma, link_karma, last_updated = row
+            # Handle None values - use defaults if missing
+            created_utc = created_utc_dt if created_utc_dt is not None else datetime.fromtimestamp(0, tz=timezone.utc)
+            comment_karma_val = comment_karma if comment_karma is not None else 0
+            link_karma_val = link_karma if link_karma is not None else 0
+            last_updated_val = last_updated if last_updated is not None else datetime.now(timezone.utc)
+            
+            return Author(
+                username=username_val,
+                created_utc=created_utc,
+                comment_karma=comment_karma_val,
+                link_karma=link_karma_val,
+                last_updated=last_updated_val
+            )
         return None
     except Exception as e:
         logger.error(f"Error getting author data for {username}: {e}")
@@ -208,26 +220,17 @@ def get_author_data(connection_pool, username: str) -> Optional[Tuple[float, int
         connection_pool.putconn(conn)
 
 
-def upsert_author_data(connection_pool, username: str, created_utc: Optional[float], 
-                       comment_karma: Optional[int], link_karma: Optional[int]) -> None:
+def upsert_author_data(connection_pool, author: Author) -> None:
     """Insert or update author data in the cache.
     
     Args:
         connection_pool: The PostgreSQL connection pool.
-        username (str): The Reddit username.
-        created_utc (Optional[float]): Author account creation timestamp (Unix timestamp).
-        comment_karma (Optional[int]): Author's comment karma.
-        link_karma (Optional[int]): Author's link karma.
+        author (Author): Author object to insert or update.
     """
     conn = connection_pool.getconn()
     cursor = conn.cursor()
     
     try:
-        # Convert Unix timestamp to datetime if provided
-        created_dt = None
-        if created_utc is not None:
-            created_dt = datetime.fromtimestamp(created_utc, tz=timezone.utc)
-        
         cursor.execute("""
             INSERT INTO authors (username, created_utc, comment_karma, link_karma, last_updated)
             VALUES (%s, %s, %s, %s, NOW())
@@ -237,12 +240,12 @@ def upsert_author_data(connection_pool, username: str, created_utc: Optional[flo
                 comment_karma = EXCLUDED.comment_karma,
                 link_karma = EXCLUDED.link_karma,
                 last_updated = NOW()
-        """, (username, created_dt, comment_karma, link_karma))
+        """, (author.username, author.created_utc, author.comment_karma, author.link_karma))
         
         conn.commit()
     except Exception as e:
         conn.rollback()
-        logger.error(f"Error upserting author data for {username}: {e}")
+        logger.error(f"Error upserting author data for {author.username}: {e}")
         raise
     finally:
         cursor.close()

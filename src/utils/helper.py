@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 
 def parse_time_input(timeframe: str) -> timedelta:
@@ -38,4 +39,6 @@ def parse_time_input(timeframe: str) -> timedelta:
     else:
         raise ValueError("Unkown unit. Use 'h', 'd' or 'w'.")
 
-        
+def convert_unix_to_datetime_utc(unix_utc: Optional[float]) -> Optional[datetime]:
+    """Convert UNIX timestamp to UTC datetime, or None if missing."""
+    return datetime.fromtimestamp(unix_utc, tz=timezone.utc) if unix_utc is not None else None   
