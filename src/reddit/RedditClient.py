@@ -74,7 +74,7 @@ class RedditClient:
             # Return Author object with default values if API call fails
             return Author(
                 username=username,
-                created_utc=datetime.fromtimestamp(0, tz=timezone.utc),
+                created_utc=None,
                 comment_karma=0,
                 link_karma=0,
                 last_updated=datetime.now(timezone.utc)
@@ -98,7 +98,7 @@ class RedditClient:
             data = []
             for author in authors_to_cache:
                 data.append((author.username, author.created_utc, author.comment_karma, author.link_karma))
-            
+            #This either adds or updates each author passed
             execute_batch(cursor, """
                 INSERT INTO authors (username, created_utc, comment_karma, link_karma, last_updated)
                 VALUES (%s, %s, %s, %s, NOW())
@@ -144,11 +144,13 @@ class RedditClient:
                     id=p.id, 
                     subreddit=subreddit, 
                     type="post", 
-                    text=p.title + ' ' + (p.selftext or ''), 
+                    text=p.title + ' ' + (p.selftext or ''),
+                    link_flair_text=p.link_flair_text,
                     created_utc=p.created_utc, 
                     origin_id=None, 
                     user_id=author_obj.username, 
                     score=p.score, 
+                    upvote_ratio=p.upvote_ratio,
                     num_comments=p.num_comments,
                     author_quality=None
                 )
@@ -165,10 +167,12 @@ class RedditClient:
                     subreddit=subreddit, 
                     type="comment", 
                     text=c.body, 
+                    link_flair_text=None,
                     created_utc=c.created_utc, 
                     origin_id=c.submission.id, 
                     user_id=author_obj.username,
                     score=c.score, 
+                    upvote_ratio=None,
                     num_comments=0,
                     author_quality=None
                 )

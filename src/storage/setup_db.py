@@ -58,10 +58,12 @@ def create_database_postgres(db_url):
                    subreddit TEXT NOT NULL,
                    created_utc TIMESTAMPTZ NOT NULL,
                    text TEXT NOT NULL,
+                   link_flair_text TEXT,
                    type TEXT NOT NULL,
                    origin_id TEXT,
                    user_id TEXT NOT NULL,
                    score INTEGER NOT NULL,
+                   upvote_ratio REAL,
                    num_comments INTEGER NOT NULL,
                    author_quality REAL
         );
@@ -122,10 +124,12 @@ def create_database_sqlite():
                    subreddit TEXT NOT NULL,
                    created_utc DATETIME NOT NULL,
                    text TEXT NOT NULL,
+                   link_flair_text TEXT,
                    type TEXT NOT NULL,
                    origin_id TEXT,
                    user_id TEXT NOT NULL,
                    score INTEGER NOT NULL,
+                   upvote_ratio REAL,
                    num_comments INTEGER NOT NULL,
                    author_quality REAL
         );
