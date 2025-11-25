@@ -12,12 +12,14 @@ class Post:
         subreddit (str): The subreddit in which the post/comment originated
         type (Literal["post", "comment"]): Indicates whether the entry is a post or comment.
         text (str): The combined title and body (or comment text).
+        link_flair_text (Optional[str]): The flair attached to the post.
         created_utc (float): The UTC timestamp of creation (as returned by PRAW).
         origin_id (Optional[str]): A comments origin post id. None for posts.
         user_id (str): The username of the post/comments author.
 
         #Engagement metrics
         score (int): The upvote score (upvotes - downvotes).
+        upvote_ratio (Optional[float]): The ratio of upvotes to downvotes(None for comments).
         num_comments (int): Number of comments (0 for comments).
 
         #Author Quality
@@ -29,11 +31,13 @@ class Post:
     subreddit: str
     type: Literal["post", "comment"]
     text: str
+    link_flair_text: Optional[str]
     created_utc: float
     origin_id: Optional[str]
     user_id: str
     #engagement
     score: int
+    upvote_ratio: Optional[float]
     num_comments: int
     #author quality snapshot score
     author_quality: Optional[float]
