@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Literal, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 @dataclass(frozen=True)
 class Post:
@@ -21,9 +21,7 @@ class Post:
         num_comments (int): Number of comments (0 for comments).
 
         #Author Quality
-        author_created_utc (float): Account creation timestamp
-        author_comment_karma (int): The authors comment karma
-        author_link_karma (int): The authors link(post) karma
+        author_quality (Optional[float]): The calculated author quality score
 
 
     """
@@ -37,10 +35,37 @@ class Post:
     #engagement
     score: int
     num_comments: int
-    #author quality
-    author_created_utc: float
-    author_comment_karma: int
-    author_link_karma: int
+    #author quality snapshot score
+    author_quality: Optional[float]
+
+@dataclass(frozen=False)
+class Author:
+    """Represents an author of a reddit post or comment.
+
+    Attributes:
+        username (str): The authors username.
+        created_utc (Optional[datetime]): The UTC timestamp of the authors account creation.
+        comment_karma (int): The authors karma on comments.
+        link_karma (int): The authors karma on posts.
+        last_updated (datetime): When the users information was last updated in the database
+    """
+    username: str
+    created_utc: Optional[datetime]
+    comment_karma: int
+    link_karma: int
+    last_updated: datetime
+
+    @classmethod
+    def deleted(cls) -> 'Author':
+        """Create an Author instance representing a deleted user"""
+        return cls(
+            username="[DELETED]",
+            created_utc= None,
+            comment_karma = 0,
+            link_karma = 0,
+            last_updated = datetime.now(timezone.utc)
+        )
+
 
 @dataclass(frozen=True)
 class MentionDataPoint:
