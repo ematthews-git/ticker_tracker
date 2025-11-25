@@ -42,11 +42,11 @@ class TickerMentionScanner:
             # Convert Unix timestamp to datetime (UTC)
             created_dt = datetime.fromtimestamp(post.created_utc, tz=timezone.utc)
             cursor.execute("""
-                INSERT INTO posts (post_id, subreddit, created_utc, text, type, origin_id, user_id, score, num_comments, author_quality)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO posts (post_id, subreddit, created_utc, text, link_flair_text, type, origin_id, user_id, score, upvote_ratio, num_comments, author_quality)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (post_id) DO NOTHING
-                """, (post.id, post.subreddit, created_dt, post.text, post.type, post.origin_id, post.user_id, 
-                      post.score, post.num_comments, post.author_quality))
+                """, (post.id, post.subreddit, created_dt, post.text, post.link_flair_text, post.type, post.origin_id, post.user_id, 
+                      post.score, post.upvote_ratio, post.num_comments, post.author_quality))
         
             conn.commit()
         except Exception as e:
@@ -60,7 +60,7 @@ class TickerMentionScanner:
         """Batch saves multiple posts to the database in a single transaction.
         
         Args:
-            posts_data: List of tuples (post_id, subreddit, created_utc, text, type, origin_id, user_id, score, num_comments, author_quality)
+            posts_data: List of tuples (post_id, subreddit, created_utc, text, link_flair_text, type, origin_id, user_id, score, upvote_ratio, num_comments, author_quality)
         """
         if not posts_data:
             return
@@ -73,8 +73,8 @@ class TickerMentionScanner:
 
         try:
             execute_batch(cursor, """
-                INSERT INTO posts (post_id, subreddit, created_utc, text, type, origin_id, user_id, score, num_comments, author_quality)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO posts (post_id, subreddit, created_utc, text, link_flair_text, type, origin_id, user_id, score, upvote_ratio, num_comments, author_quality)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (post_id) DO NOTHING
                 """, posts_data)
             
@@ -116,8 +116,8 @@ class TickerMentionScanner:
 
             # Convert Unix timestamp to datetime for batch insert (UTC)
             created_dt = datetime.fromtimestamp(post.created_utc, tz=timezone.utc)
-            new_posts.append((post.id, post.subreddit, created_dt, post.text, post.type, post.origin_id, post.user_id,
-                             post.score, post.num_comments, post.author_quality))
+            new_posts.append((post.id, post.subreddit, created_dt, post.text, post.link_flair_text, post.type, post.origin_id, post.user_id,
+                             post.score, post.upvote_ratio, post.num_comments, post.author_quality))
             posts_to_process.append(post)
 
         # Batch insert all new posts at once
