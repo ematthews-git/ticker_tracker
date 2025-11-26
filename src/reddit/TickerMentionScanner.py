@@ -109,7 +109,7 @@ class TickerMentionScanner:
         if self.connection_pool and post_ids_to_check:
             existing_ids = get_existing_post_ids_batch(self.connection_pool, post_ids_to_check)
             
-        logger.debug(f"Found {len(existing_ids)} existing posts in batch of {len(post_ids_to_check)}")
+        logger.info(f"Found {len(existing_ids)} existing posts in batch of {len(post_ids_to_check)}")
 
         # Collect new posts to batch insert
         new_posts = []
