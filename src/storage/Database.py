@@ -255,3 +255,105 @@ def upsert_author_data(connection_pool, author: Author) -> None:
 def fetch_growth_tickers(connection_pool) -> dict[str, list[MentionDataPoint]]:
 
     conn = connection_pool.getconn()
+    cursor = conn.cursor()
+
+    try:
+        # Get tickers with positive growth in mentions
+        # This is a placeholder for more complex logic
+        cursor.execute("""
+            SELECT ticker, SUM(mention_count) as total_mentions
+            FROM mentions
+            GROUP BY ticker
+            ORDER BY total_mentions DESC
+            LIMIT 5
+        """)
+        
+        # For now just return empty dict as this seems to be a work in progress
+        return {}
+    except Exception as e:
+        logger.error(f"Error fetching growth tickers: {e}")
+        return {}
+    finally:
+        cursor.close()
+        connection_pool.putconn(conn)
+
+def get_authors_batch(connection_pool, usernames: list[str]) -> dict[str, Author]:
+    """Get cached author data for a list of usernames.
+    
+    Args:
+        connection_pool: The PostgreSQL connection pool.
+        usernames (list[str]): List of usernames to look up.
+        
+    Returns:
+        dict[str, Author]: Dictionary mapping username to Author object for found authors.
+    """
+    if not usernames:
+        return {}
+        
+    conn = connection_pool.getconn()
+    cursor = conn.cursor()
+    
+    try:
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        
+        # Use ANY for batch selection
+        cursor.execute("""
+            SELECT username, created_utc, comment_karma, link_karma, last_updated
+            FROM authors
+            WHERE username = ANY(%s) AND last_updated >= %s
+        """, (usernames, seven_days_ago))
+        
+        results = {}
+        for row in cursor.fetchall():
+            username_val, created_utc_dt, comment_karma, link_karma, last_updated = row
+            
+            # Handle None values
+            created_utc = created_utc_dt if created_utc_dt is not None else datetime.fromtimestamp(0, tz=timezone.utc)
+            comment_karma_val = comment_karma if comment_karma is not None else 0
+            link_karma_val = link_karma if link_karma is not None else 0
+            last_updated_val = last_updated if last_updated is not None else datetime.now(timezone.utc)
+            
+            results[username_val] = Author(
+                username=username_val,
+                created_utc=created_utc,
+                comment_karma=comment_karma_val,
+                link_karma=link_karma_val,
+                last_updated=last_updated_val
+            )
+            
+        return results
+    except Exception as e:
+        logger.error(f"Error getting batch author data: {e}")
+        return {}
+    finally:
+        cursor.close()
+        connection_pool.putconn(conn)
+
+def get_existing_post_ids_batch(connection_pool, post_ids: list[str]) -> set[str]:
+    """Check which post IDs from the list already exist in the database.
+    
+    Args:
+        connection_pool: The PostgreSQL connection pool.
+        post_ids (list[str]): List of post IDs to check.
+        
+    Returns:
+        set[str]: Set of post IDs that already exist.
+    """
+    if not post_ids:
+        return set()
+        
+    conn = connection_pool.getconn()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT post_id FROM posts WHERE post_id = ANY(%s)
+        """, (post_ids,))
+        
+        return {row[0] for row in cursor.fetchall()}
+    except Exception as e:
+        logger.error(f"Error checking existing posts batch: {e}")
+        return set()
+    finally:
+        cursor.close()
+        connection_pool.putconn(conn)
