@@ -333,11 +333,10 @@ class RedditClient:
             comment_count = 0
             for c in raw_comments:
                 post_obj = self._convert_to_comment(c, subreddit, cached_authors)
+                yield post_obj
                 comment_count += 1
 
             logger.debug(f"Fetched {post_count} posts and {comment_count} comments from r/{subreddit}")
 
         except Exception as e:
             logger.error(f"Error connecting with subreddit '{subreddit}': {e}", exc_info=True)
-    
-    
