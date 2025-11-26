@@ -467,3 +467,108 @@ class TestFetchPopularTickers(TestDatabase):
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 
+
+from models import Author
+
+class TestAuthorData(TestDatabase):
+    """Test suite for author data functions"""
+
+    def test_get_author_data_hit(self):
+        """Test getting existing author data"""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+
+        # Mock DB return
+        now = datetime.now(timezone.utc)
+        mock_cursor.fetchone.return_value = (
+            "test_user", now, 100, 200, now
+        )
+
+        from storage.Database import get_author_data
+        result = get_author_data(mock_pool, "test_user")
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.username, "test_user")
+        self.assertEqual(result.comment_karma, 100)
+        
+        mock_pool.putconn.assert_called_once_with(mock_conn)
+
+    def test_get_author_data_miss(self):
+        """Test getting non-existent author data"""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+
+        mock_cursor.fetchone.return_value = None
+
+        from storage.Database import get_author_data
+        result = get_author_data(mock_pool, "test_user")
+
+        self.assertIsNone(result)
+
+    def test_upsert_author_data(self):
+        """Test upserting author data"""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+
+        author = Author(
+            username="test_user",
+            created_utc=datetime.now(timezone.utc),
+            comment_karma=100,
+            link_karma=200,
+            last_updated=datetime.now(timezone.utc)
+        )
+
+        from storage.Database import upsert_author_data
+        upsert_author_data(mock_pool, author)
+
+        mock_cursor.execute.assert_called_once()
+        self.assertIn("INSERT INTO authors", mock_cursor.execute.call_args[0][0])
+        mock_conn.commit.assert_called_once()
+
+    def test_get_authors_batch(self):
+        """Test batch fetching authors"""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+
+        now = datetime.now(timezone.utc)
+        mock_cursor.fetchall.return_value = [
+            ("user1", now, 10, 20, now),
+            ("user2", now, 30, 40, now)
+        ]
+
+        from storage.Database import get_authors_batch
+        results = get_authors_batch(mock_pool, ["user1", "user2"])
+
+        self.assertEqual(len(results), 2)
+        self.assertIn("user1", results)
+        self.assertIn("user2", results)
+
+    def test_get_existing_post_ids_batch(self):
+        """Test batch checking existing posts"""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_pool = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+
+        mock_cursor.fetchall.return_value = [("post1",), ("post3",)]
+
+        from storage.Database import get_existing_post_ids_batch
+        results = get_existing_post_ids_batch(mock_pool, ["post1", "post2", "post3"])
+
+        self.assertEqual(len(results), 2)
+        self.assertIn("post1", results)
+        self.assertIn("post3", results)
+        self.assertNotIn("post2", results)
