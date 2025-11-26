@@ -30,17 +30,36 @@ def collect_data() -> None:
     logger.info(f"[{datetime.now(timezone.utc)}] starting data collection...")
     try:
         #initialise clients
-        reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT, pool)
+        # RedditClient is not thread safe, so we instantiate it inside the thread
         scanner = TickerMentionScanner(VALID, pool)
 
         all_posts = []
 
-        #fetch posts from each subreddit
-        for subreddit in SUBREDDITS:
-            logger.info(f"Fetching posts from r/{subreddit}...")
-            posts = list(reddit.fetch_recent_posts(subreddit, limit=200))
-            all_posts.extend(posts)
-            logger.info(f"Fetched {len(posts)} posts/comments from r/{subreddit}")
+        # Function to process a single subreddit
+        def process_subreddit(subreddit):
+            try:
+                # Create a new RedditClient instance for this thread
+                local_reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT, pool)
+                logger.info(f"Fetching posts from r/{subreddit}...")
+                posts = list(local_reddit.fetch_recent_posts(subreddit, limit=200))
+                logger.info(f"Fetched {len(posts)} posts/comments from r/{subreddit}")
+                return posts
+            except Exception as e:
+                logger.error(f"Error processing r/{subreddit}: {e}")
+                return []
+
+        #fetch posts from each subreddit in parallel
+        import concurrent.futures
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_sub = {executor.submit(process_subreddit, sub): sub for sub in SUBREDDITS}
+            for future in concurrent.futures.as_completed(future_to_sub):
+                sub = future_to_sub[future]
+                try:
+                    posts = future.result()
+                    all_posts.extend(posts)
+                except Exception as e:
+                    logger.error(f"Exception processing r/{sub}: {e}")
 
         #count mentions and save posts
         logger.info("Counting ticker mentions...")

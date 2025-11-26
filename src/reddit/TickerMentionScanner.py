@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models import Post, MentionDataPoint
+from storage.Database import get_existing_post_ids_batch
 
 import logging
 logger = logging.getLogger(__name__)
@@ -101,9 +102,14 @@ class TickerMentionScanner:
         timestamp = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
         #get existing posts to avoid double counting
+        # Optimize: Check only for the posts we just fetched, not the entire DB
+        post_ids_to_check = [p.id for p in post_list]
         existing_ids = set()
-        existing_ids = self._get_existing_posts_ids()
-        logger.info(f"Found {len(existing_ids)} existing posts in database")
+        
+        if self.connection_pool and post_ids_to_check:
+            existing_ids = get_existing_post_ids_batch(self.connection_pool, post_ids_to_check)
+            
+        logger.debug(f"Found {len(existing_ids)} existing posts in batch of {len(post_ids_to_check)}")
 
         # Collect new posts to batch insert
         new_posts = []

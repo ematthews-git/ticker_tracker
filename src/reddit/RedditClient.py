@@ -119,26 +119,115 @@ class RedditClient:
             cursor.close()
             self.connection_pool.putconn(conn)
     
-    def fetch_recent_posts(self, subreddit: str, limit: int =200):
-        """Yields recent posts and comments from subreddit
+    #def _proccess_missing_authors(self):
 
+
+    
+    def fetch_recent_posts(self, subreddit: str, limit: int = 200):
+        """Yields recent posts and comments from subreddit
+        
         Args:
             subreddit (str): Name of subreddit (without r/).
             limit (int, optional): Max number of posts to be retrieved. does not affect comments. Defaults to 200.
-
+            
         Yields:
             Post: a post dataclass instance representing an entry from the subreddit.
         """
-        authors_to_cache = []  # Collect Author objects fetched from API for batch insert
-        
         try:
             logger.debug(f"Fetching {limit} recent posts from r/{subreddit}")
-
+            
             sub = self.reddit.subreddit(subreddit)
+            
+            # 1. Fetch all raw posts and comments first
+            raw_posts = list(sub.new(limit=limit))
+            raw_comments = list(sub.comments(limit=200))
+            
+            # 2. Collect all unique author names
+            author_names = set()
+            for p in raw_posts:
+                if p.author:
+                    author_names.add(p.author.name)
+            for c in raw_comments:
+                if c.author:
+                    author_names.add(c.author.name)
+                    
+            # 3. Batch check database for existing authors
+            cached_authors = {}
+            if self.connection_pool and author_names:
+                from storage.Database import get_authors_batch
+                cached_authors = get_authors_batch(self.connection_pool, list(author_names))
+                logger.debug(f"Batch cache hit for {len(cached_authors)}/{len(author_names)} authors")
+            
+            # 4. Identify missing authors and fetch from API
+            missing_authors = []
+            authors_to_cache = []
+            
+            # Helper to get author object (from cache or API)
+            # We'll pre-fetch missing ones now
+            for name in author_names:
+                if name not in cached_authors:
+                    missing_authors.append(name)
+            
+            # If we have missing authors, we need to fetch their data
+            # PRAW objects already have the data if we accessed p.author, but we need to be careful
+            # We can iterate through our raw items again to find the PRAW author objects for missing names
+            
+            # Map username -> PRAW author object for missing ones
+            missing_author_objects = {}
+            if missing_authors:
+                logger.debug(f"Fetching {len(missing_authors)} missing authors from API")
+                # Scan posts/comments to find the PRAW objects
+                for item in raw_posts + raw_comments:
+                    if item.author and item.author.name in missing_authors and item.author.name not in missing_author_objects:
+                        missing_author_objects[item.author.name] = item.author
+                
+                # Process missing authors
+                for username, author_praw in missing_author_objects.items():
+                    try:
+                        # Fetch attributes to force API call if needed (though usually lazy loaded)
+                        # For PRAW, accessing attributes triggers the fetch
+                        created_utc_float = author_praw.created_utc
+                        comment_karma = author_praw.comment_karma
+                        link_karma = author_praw.link_karma
+                        
+                        created_utc_dt = convert_unix_to_datetime_utc(created_utc_float)
+                        
+                        author_obj = Author(
+                            username=username,
+                            created_utc=created_utc_dt,
+                            comment_karma=comment_karma if comment_karma is not None else 0,
+                            link_karma=link_karma if link_karma is not None else 0,
+                            last_updated=datetime.now(timezone.utc)
+                        )
+                        cached_authors[username] = author_obj
+                        authors_to_cache.append(author_obj)
+                    except Exception as e:
+                        logger.warning(f"Error fetching author data for {username}: {e}")
+                        # Use default for failed fetches
+                        cached_authors[username] = Author.deleted() # Or default
+                        if username not in cached_authors: # If Author.deleted() didn't set it (it returns an object)
+                             cached_authors[username] = Author(
+                                username=username,
+                                created_utc=None,
+                                comment_karma=0,
+                                link_karma=0,
+                                last_updated=datetime.now(timezone.utc)
+                            )
+
+            # 5. Batch upsert new authors
+            if authors_to_cache:
+                self._batch_upsert_authors(authors_to_cache)
+                
+            # 6. Yield Posts with author data
             post_count = 0
-            for p in sub.new(limit=limit):
-                #get user info for post
-                author_obj = self._get_author_data_from_cache_or_api(p.author, authors_to_cache)
+            for p in raw_posts:
+                author_name = p.author.name if p.author else None
+                # Use cached object or deleted/default
+                if author_name and author_name in cached_authors:
+                    author_obj = cached_authors[author_name]
+                    user_id = author_obj.username
+                else:
+                    user_id = "[DELETED]" 
                 
                 yield Post(
                     id=p.id, 
@@ -148,20 +237,23 @@ class RedditClient:
                     link_flair_text=p.link_flair_text,
                     created_utc=p.created_utc, 
                     origin_id=None, 
-                    user_id=author_obj.username, 
+                    user_id=user_id, 
                     score=p.score, 
                     upvote_ratio=p.upvote_ratio,
                     num_comments=p.num_comments,
                     author_quality=None
                 )
-                
                 post_count += 1
-            #comments
+                
             comment_count = 0
-            for c in sub.comments(limit=200):
-                #get user info for comments
-                author_obj = self._get_author_data_from_cache_or_api(c.author, authors_to_cache)
-            
+            for c in raw_comments:
+                author_name = c.author.name if c.author else None
+                if author_name and author_name in cached_authors:
+                    author_obj = cached_authors[author_name]
+                    user_id = author_obj.username
+                else:
+                    user_id = "[DELETED]"
+                    
                 yield Post(
                     id=c.id, 
                     subreddit=subreddit, 
@@ -170,26 +262,14 @@ class RedditClient:
                     link_flair_text=None,
                     created_utc=c.created_utc, 
                     origin_id=c.submission.id, 
-                    user_id=author_obj.username,
+                    user_id=user_id,
                     score=c.score, 
                     upvote_ratio=None,
                     num_comments=0,
                     author_quality=None
                 )
                 comment_count += 1
-            
-            # Batch insert all authors that were fetched from API
-            if authors_to_cache:
-                # Remove duplicates (same author might appear in both posts and comments)
-                seen = set()
-                unique_authors = []
-                for author in authors_to_cache:
-                    if author.username not in seen:
-                        seen.add(author.username)
-                        unique_authors.append(author)
-                
-                self._batch_upsert_authors(unique_authors)
-            
+
             logger.debug(f"Fetched {post_count} posts and {comment_count} comments from r/{subreddit}")
 
         except Exception as e:
