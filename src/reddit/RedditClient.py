@@ -131,7 +131,7 @@ class RedditClient:
             list[Author]: A list of authors which need to be added to the cache.
         """
 
-        authors_to_cache = {}
+        authors_to_cache = []
 
         for username, author_praw in missing_author_objects.items():
             try:
