@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from storage.Database import get_author_data, upsert_author_data
 from utils.helper import convert_unix_to_datetime_utc
+from praw.models import Redditor
 
 class RedditClient:
     """Establishes a connection with the reddit api and communicates with the reddit API.
@@ -119,8 +120,47 @@ class RedditClient:
             cursor.close()
             self.connection_pool.putconn(conn)
     
-    #def _proccess_missing_authors(self):
+    def _process_missing_authors(self, missing_author_objects: dict[str, Redditor], cached_authors: dict[str, Author], authors_to_cache: list[Author]) -> None:
+        """Fetches missing authors from API. Updates cached_authors and authors_to_cache.
 
+        Args:
+            missing_author_objects (dict[str, Redditor]): A dict mapping the authors name to the Redditor object as returned by PRAW.
+            cached_authors (dict[str, Author]): A dict mapping the authors name to the local Author object.
+            authors_to_cache (list[Author]): A list of authors which need to be added to the cache.
+        """
+        # Process missing authors
+        for username, author_praw in missing_author_objects.items():
+            try:
+                # Fetch attributes to force API call if needed (though usually lazy loaded)
+                # For PRAW, accessing attributes triggers the fetch
+                created_utc_float = author_praw.created_utc
+                comment_karma = author_praw.comment_karma
+                link_karma = author_praw.link_karma
+                
+                created_utc_dt = convert_unix_to_datetime_utc(created_utc_float)
+                
+                author_obj = Author(
+                    username=username,
+                    created_utc=created_utc_dt,
+                    comment_karma=comment_karma if comment_karma is not None else 0,
+                    link_karma=link_karma if link_karma is not None else 0,
+                    last_updated=datetime.now(timezone.utc)
+                )
+                cached_authors[username] = author_obj
+                authors_to_cache.append(author_obj)
+            except Exception as e:
+                logger.warning(f"Error fetching author data for {username}: {e}")
+                # Use default for failed fetches
+                cached_authors[username] = Author.deleted() # Or default
+                if username not in cached_authors: # If Author.deleted() didn't set it (it returns an object)
+                        cached_authors[username] = Author(
+                        username=username,
+                        created_utc=None,
+                        comment_karma=0,
+                        link_karma=0,
+                        last_updated=datetime.now(timezone.utc)
+                    )
+        
 
     
     def fetch_recent_posts(self, subreddit: str, limit: int = 200):
@@ -170,9 +210,9 @@ class RedditClient:
             
             # If we have missing authors, we need to fetch their data
             # PRAW objects already have the data if we accessed p.author, but we need to be careful
-            # We can iterate through our raw items again to find the PRAW author objects for missing names
+            # We can iterate through our raw items again to find the PRAW Redditor objects for missing names
             
-            # Map username -> PRAW author object for missing ones
+            # Map username -> PRAW Redditor object for missing ones
             missing_author_objects = {}
             if missing_authors:
                 logger.debug(f"Fetching {len(missing_authors)} missing authors from API")
@@ -181,38 +221,8 @@ class RedditClient:
                     if item.author and item.author.name in missing_authors and item.author.name not in missing_author_objects:
                         missing_author_objects[item.author.name] = item.author
                 
-                # Process missing authors
-                for username, author_praw in missing_author_objects.items():
-                    try:
-                        # Fetch attributes to force API call if needed (though usually lazy loaded)
-                        # For PRAW, accessing attributes triggers the fetch
-                        created_utc_float = author_praw.created_utc
-                        comment_karma = author_praw.comment_karma
-                        link_karma = author_praw.link_karma
-                        
-                        created_utc_dt = convert_unix_to_datetime_utc(created_utc_float)
-                        
-                        author_obj = Author(
-                            username=username,
-                            created_utc=created_utc_dt,
-                            comment_karma=comment_karma if comment_karma is not None else 0,
-                            link_karma=link_karma if link_karma is not None else 0,
-                            last_updated=datetime.now(timezone.utc)
-                        )
-                        cached_authors[username] = author_obj
-                        authors_to_cache.append(author_obj)
-                    except Exception as e:
-                        logger.warning(f"Error fetching author data for {username}: {e}")
-                        # Use default for failed fetches
-                        cached_authors[username] = Author.deleted() # Or default
-                        if username not in cached_authors: # If Author.deleted() didn't set it (it returns an object)
-                             cached_authors[username] = Author(
-                                username=username,
-                                created_utc=None,
-                                comment_karma=0,
-                                link_karma=0,
-                                last_updated=datetime.now(timezone.utc)
-                            )
+            #process authors
+            self._process_missing_authors(missing_author_objects, cached_authors, authors_to_cache)
 
             # 5. Batch upsert new authors
             if authors_to_cache:
