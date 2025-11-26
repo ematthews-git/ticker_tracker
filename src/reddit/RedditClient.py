@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from storage.Database import get_author_data, upsert_author_data
 from utils.helper import convert_unix_to_datetime_utc
-from praw.models import Redditor
+from praw.models import Redditor, Submission, Comment
 
 class RedditClient:
     """Establishes a connection with the reddit api and communicates with the reddit API.
@@ -120,15 +120,19 @@ class RedditClient:
             cursor.close()
             self.connection_pool.putconn(conn)
     
-    def _process_missing_authors(self, missing_author_objects: dict[str, Redditor], cached_authors: dict[str, Author], authors_to_cache: list[Author]) -> None:
-        """Fetches missing authors from API. Updates cached_authors and authors_to_cache.
+    def _process_missing_authors(self, missing_author_objects: dict[str, Redditor], cached_authors: dict[str, Author]) -> None:
+        """Fetches missing authors from API. Updates cached_authors with missing authors retrieved.
 
         Args:
             missing_author_objects (dict[str, Redditor]): A dict mapping the authors name to the Redditor object as returned by PRAW.
             cached_authors (dict[str, Author]): A dict mapping the authors name to the local Author object.
-            authors_to_cache (list[Author]): A list of authors which need to be added to the cache.
+        
+        Returns:
+            list[Author]: A list of authors which need to be added to the cache.
         """
-        # Process missing authors
+
+        authors_to_cache = {}
+
         for username, author_praw in missing_author_objects.items():
             try:
                 # Fetch attributes to force API call if needed (though usually lazy loaded)
@@ -160,9 +164,144 @@ class RedditClient:
                         link_karma=0,
                         last_updated=datetime.now(timezone.utc)
                     )
-        
-
     
+    def _extract_unique_author_names(self, *item_list) -> set:
+        """Gets all unique authors from any number of lists of posts/comments
+
+        Args:
+            *item_list: Variable number of lists containg PRAW Submission or Comments.
+
+        Returns:
+            set: Set of unique author names (str).
+        """
+        if not item_list:
+            return set()
+        
+        author_names = set()
+        
+        for list in item_list:
+            for p in list:
+                if p.author:
+                    author_names.add(p.author.name)
+
+        return author_names
+    
+    def _resolve_authors(self, raw_posts: list[Submission], raw_comments: list[Comment]) -> dict[str, Author]:
+        """Handles author resolution pipeline.
+
+        Finds all cached authors for given posts, 
+
+        Args:
+            raw_posts (list[Submission]): List of PRAW submission objects.
+            raw_comments (list[Comment]): List of PRAW comment objects.
+
+        Returns:
+            dict[str, Author]: All authors from post/comments which are in the cache.
+        """
+        #Gets all author names from the post/comments
+        author_names = self._extract_unique_author_names(raw_posts, raw_comments)
+
+        #Get all authors which are in the cache
+        cached_authors = {}
+        if self.connection_pool and author_names:
+            from storage.Database import get_authors_batch
+            cached_authors = get_authors_batch(self.connection_pool, list(author_names))
+            logger.debug(f"Batch cache hit for {len(cached_authors)}/{len(author_names)} authors")
+        
+        #Identify authors not in cache (or outdated)
+        missing_authors = []
+        for name in author_names:
+            if name not in cached_authors:
+                missing_authors.append(name)
+        
+        # Map username -> PRAW Redditor object for missing ones
+        missing_author_objects = {}
+        if missing_authors:
+            logger.debug(f"Fetching {len(missing_authors)} missing authors from API")
+            # Scan posts/comments to find the PRAW objects
+            for item in raw_posts + raw_comments:
+                if item.author and item.author.name in missing_authors and item.author.name not in missing_author_objects:
+                    missing_author_objects[item.author.name] = item.author
+            
+        #Gets list of missing authors, also cached_authors is updated to include the processed missing ones
+        authors_to_cache = self._process_missing_authors(missing_author_objects, cached_authors)
+
+        #Batch upsert new authors
+        if authors_to_cache:
+            self._batch_upsert_authors(authors_to_cache)
+        
+        return cached_authors
+
+    def _convert_to_post(self, raw_post, subreddit: str, cached_authors: dict) -> Post:
+        """Converts a raw Reddit post object to a Post dataclass instance.
+        
+        Args:
+            raw_post: PRAW Submission object
+            subreddit (str): Name of the subreddit
+            cached_authors (dict): Dictionary mapping author names to Author objects
+            
+        Returns:
+            Post: A Post dataclass instance representing the Reddit post
+        """
+        author_name = raw_post.author.name if raw_post.author else None
+        
+        # Use cached author object or mark as deleted
+        if author_name and author_name in cached_authors:
+            author_obj = cached_authors[author_name]
+            user_id = author_obj.username
+        else:
+            user_id = "[DELETED]"
+        
+        return Post(
+            id=raw_post.id,
+            subreddit=subreddit,
+            type="post",
+            text=raw_post.title + ' ' + (raw_post.selftext or ''),
+            link_flair_text=raw_post.link_flair_text,
+            created_utc=raw_post.created_utc,
+            origin_id=None,
+            user_id=user_id,
+            score=raw_post.score,
+            upvote_ratio=raw_post.upvote_ratio,
+            num_comments=raw_post.num_comments,
+            author_quality=None
+        )
+
+    def _convert_to_comment(self, raw_comment, subreddit: str, cached_authors: dict) -> Post:
+        """Converts a raw Reddit comment object to a Post dataclass instance.
+        
+        Args:
+            raw_comment: PRAW Comment object
+            subreddit (str): Name of the subreddit
+            cached_authors (dict): Dictionary mapping author names to Author objects
+            
+        Returns:
+            Post: A Post dataclass instance representing the Reddit comment
+        """
+        author_name = raw_comment.author.name if raw_comment.author else None
+        
+        # Use cached author object or mark as deleted
+        if author_name and author_name in cached_authors:
+            author_obj = cached_authors[author_name]
+            user_id = author_obj.username
+        else:
+            user_id = "[DELETED]"
+        
+        return Post(
+            id=raw_comment.id,
+            subreddit=subreddit,
+            type="comment",
+            text=raw_comment.body,
+            link_flair_text=None,
+            created_utc=raw_comment.created_utc,
+            origin_id=raw_comment.submission.id,
+            user_id=user_id,
+            score=raw_comment.score,
+            upvote_ratio=None,
+            num_comments=0,
+            author_quality=None
+        )
+
     def fetch_recent_posts(self, subreddit: str, limit: int = 200):
         """Yields recent posts and comments from subreddit
         
@@ -178,106 +317,22 @@ class RedditClient:
             
             sub = self.reddit.subreddit(subreddit)
             
-            # 1. Fetch all raw posts and comments first
+            #Fetch all raw posts and comments first
             raw_posts = list(sub.new(limit=limit))
             raw_comments = list(sub.comments(limit=200))
             
-            # 2. Collect all unique author names
-            author_names = set()
-            for p in raw_posts:
-                if p.author:
-                    author_names.add(p.author.name)
-            for c in raw_comments:
-                if c.author:
-                    author_names.add(c.author.name)
-                    
-            # 3. Batch check database for existing authors
-            cached_authors = {}
-            if self.connection_pool and author_names:
-                from storage.Database import get_authors_batch
-                cached_authors = get_authors_batch(self.connection_pool, list(author_names))
-                logger.debug(f"Batch cache hit for {len(cached_authors)}/{len(author_names)} authors")
-            
-            # 4. Identify missing authors and fetch from API
-            missing_authors = []
-            authors_to_cache = []
-            
-            # Helper to get author object (from cache or API)
-            # We'll pre-fetch missing ones now
-            for name in author_names:
-                if name not in cached_authors:
-                    missing_authors.append(name)
-            
-            # If we have missing authors, we need to fetch their data
-            # PRAW objects already have the data if we accessed p.author, but we need to be careful
-            # We can iterate through our raw items again to find the PRAW Redditor objects for missing names
-            
-            # Map username -> PRAW Redditor object for missing ones
-            missing_author_objects = {}
-            if missing_authors:
-                logger.debug(f"Fetching {len(missing_authors)} missing authors from API")
-                # Scan posts/comments to find the PRAW objects
-                for item in raw_posts + raw_comments:
-                    if item.author and item.author.name in missing_authors and item.author.name not in missing_author_objects:
-                        missing_author_objects[item.author.name] = item.author
+            cached_authors = self._resolve_authors(raw_posts, raw_comments)
                 
-            #process authors
-            self._process_missing_authors(missing_author_objects, cached_authors, authors_to_cache)
-
-            # 5. Batch upsert new authors
-            if authors_to_cache:
-                self._batch_upsert_authors(authors_to_cache)
-                
-            # 6. Yield Posts with author data
+            #Yield Posts
             post_count = 0
             for p in raw_posts:
-                author_name = p.author.name if p.author else None
-                # Use cached object or deleted/default
-                if author_name and author_name in cached_authors:
-                    author_obj = cached_authors[author_name]
-                    user_id = author_obj.username
-                else:
-                    user_id = "[DELETED]" 
-                
-                yield Post(
-                    id=p.id, 
-                    subreddit=subreddit, 
-                    type="post", 
-                    text=p.title + ' ' + (p.selftext or ''),
-                    link_flair_text=p.link_flair_text,
-                    created_utc=p.created_utc, 
-                    origin_id=None, 
-                    user_id=user_id, 
-                    score=p.score, 
-                    upvote_ratio=p.upvote_ratio,
-                    num_comments=p.num_comments,
-                    author_quality=None
-                )
+                post_obj = self._convert_to_post(p, subreddit, cached_authors)
+                yield post_obj
                 post_count += 1
-                
+            #Yield Comments
             comment_count = 0
             for c in raw_comments:
-                author_name = c.author.name if c.author else None
-                if author_name and author_name in cached_authors:
-                    author_obj = cached_authors[author_name]
-                    user_id = author_obj.username
-                else:
-                    user_id = "[DELETED]"
-                    
-                yield Post(
-                    id=c.id, 
-                    subreddit=subreddit, 
-                    type="comment", 
-                    text=c.body, 
-                    link_flair_text=None,
-                    created_utc=c.created_utc, 
-                    origin_id=c.submission.id, 
-                    user_id=user_id,
-                    score=c.score, 
-                    upvote_ratio=None,
-                    num_comments=0,
-                    author_quality=None
-                )
+                post_obj = self._convert_to_comment(c, subreddit, cached_authors)
                 comment_count += 1
 
             logger.debug(f"Fetched {post_count} posts and {comment_count} comments from r/{subreddit}")
