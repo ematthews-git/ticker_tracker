@@ -88,21 +88,15 @@ class TickerMentionScanner:
             cursor.close()
             self.connection_pool.putconn(conn)
     
-    #Counts mentions of valid tickers into list of MentionDataPoint objects
-    def process_mentions(self, post_list: list[Post]) -> list[MentionDataPoint]:
-        """finds the mention of any valid ticker in the list of text parsed and saves each post to db.
+    def _find_new_posts(self, post_list: list[Post]) -> list[Post]:
+        """Takes a list of posts and finds all posts not already saved in the database.
 
         Args:
-            post_list (Iterable[Post]): The list of post items to search.
+            post_list (list[Post]): Posts to search for new posts within.
 
         Returns:
-            list[MentionDataPoint]: A list of MentionDataPoint objects representing ticker mentions.
+            list[Post]: All posts from the passed list which are not yet in the database.
         """
-        counts = {}
-        timestamp = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-
-        #get existing posts to avoid double counting
-        # Optimize: Check only for the posts we just fetched, not the entire DB
         post_ids_to_check = [p.id for p in post_list]
         existing_ids = set()
         
@@ -113,18 +107,51 @@ class TickerMentionScanner:
 
         # Collect new posts to batch insert
         new_posts = []
-        posts_to_process = []
 
         for post in post_list:
             #skip if already processed
             if post.id in existing_ids:
                 continue
 
-            # Convert Unix timestamp to datetime for batch insert (UTC)
+            new_posts.append(post)
+
+        return new_posts
+
+    def _posts_to_tuples(self, post_list: list[Post]) -> list[tuple]:
+        """Simple convert a list of Post objects to a list of tuples.
+
+        Args:
+            post_list (Post): A list of Posts.
+                
+        Returns:
+            list[tuple]: A list of equivalent tuples.
+                (post_id, subreddit, created_utc, text, link_flair_text, type, origin_id, user_id, score, upvote_ratio, num_comments, author_quality)
+        """
+        if not post_list:
+            return []
+        
+        tuples = []
+        for post in post_list:
             created_dt = datetime.fromtimestamp(post.created_utc, tz=timezone.utc)
-            new_posts.append((post.id, post.subreddit, created_dt, post.text, post.link_flair_text, post.type, post.origin_id, post.user_id,
+            tuples.append((post.id, post.subreddit, created_dt, post.text, post.link_flair_text, post.type, post.origin_id, post.user_id,
                              post.score, post.upvote_ratio, post.num_comments, post.author_quality))
-            posts_to_process.append(post)
+        
+        return tuples
+        
+    #Counts mentions of valid tickers into list of MentionDataPoint objects
+    def process_mentions(self, post_list: list[Post]) -> list[MentionDataPoint]:
+        """finds the mention of any valid ticker in the list of text parsed and saves each post to db.
+
+        Args:
+            post_list (Iterable[Post]): The list of post items to search.
+
+        Returns:
+            list[MentionDataPoint]: A list of MentionDataPoint objects representing ticker mentions.
+        """
+        timestamp = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+        
+        posts_to_process = self._find_new_posts(post_list)
+        new_posts = self._posts_to_tuples(posts_to_process)
 
         # Batch insert all new posts at once
         if new_posts:
@@ -171,9 +198,10 @@ class TickerMentionScanner:
         ]
         
         return mention_data_points
-
+    
     def _get_existing_posts_ids(self) -> set:
         """Gets set of all post IDs already in the database
+        
         Returns:
             set: all post IDs
         """
@@ -190,3 +218,5 @@ class TickerMentionScanner:
         finally:
             cursor.close()
             self.connection_pool.putconn(conn)
+
+   
