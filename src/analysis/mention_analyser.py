@@ -145,7 +145,7 @@ class MentionAnalyser:
         subreddit_sentiments = defaultdict(list)
 
         for post in posts:
-            if ticker.uppper() in post.text.upper():
+            if ticker.upper() in post.text.upper():
                 sentiment = self.analyse_post_sentiment(post)
                 subreddit_sentiments[post.subreddit].append(sentiment)
         
