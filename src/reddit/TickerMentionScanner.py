@@ -205,8 +205,13 @@ class TickerMentionScanner:
         
         # Convert mention_data dictionary to list of MentionDataPoint objects
         #avg_sentiment = self.mention_analyser.calculate_weighted_sentiment(data['posts', ticker])
-        mention_data_points = [
-            MentionDataPoint(
+        mention_data_points = []
+        for (ticker, subreddit), data in mention_data.items():
+            sentiment = self.mention_analyser.analyse_ticker_sentiment(data['posts'], ticker)
+            avg_sentiment = sentiment['avg_sentiment']
+
+            mention_data_points.append(
+                MentionDataPoint(
                 ticker=ticker,
                 subreddit=subreddit,
                 timestamp=timestamp,
@@ -214,11 +219,9 @@ class TickerMentionScanner:
                 unique_users=len(data['users']),
                 total_score=data['total_score'],
                 total_comments=data['total_comments'],
-                avg_sentiment=self.mention_analyser.calculate_weighted_sentiment(data['posts'], ticker)
+                avg_sentiment=avg_sentiment
+                )
             )
-            for (ticker, subreddit), data in mention_data.items()
-        ]
-        
         return mention_data_points
     
     def _get_existing_posts_ids(self) -> set:
