@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal, Optional
 from datetime import datetime, timezone
+from enum import Enum, auto
 
 @dataclass(frozen=True)
 class Post:
@@ -24,8 +25,6 @@ class Post:
 
         #Author Quality
         author_quality (Optional[float]): The calculated author quality score
-
-
     """
     id: str
     subreddit: str
@@ -94,3 +93,10 @@ class MentionDataPoint:
     total_comments: int
     avg_sentiment: float
 
+
+class SentimentCategory(Enum):
+    VERY_POSITIVE = "very_positive"
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+    NEGATIVE = "negative"
+    VERY_NEGATIVE = "very_negative"
