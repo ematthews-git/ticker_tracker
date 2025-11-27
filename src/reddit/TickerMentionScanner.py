@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models import Post, MentionDataPoint
 from storage.Database import get_existing_post_ids_batch
+from analysis.mention_analyser import MentionAnalyser
 
 import logging
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class TickerMentionScanner:
         """
         self.valid = set(valid_tickers)
         self.connection_pool = connection_pool
+        self.mention_analyser = MentionAnalyser()
 
     def save_post(self, post: Post) -> None:
         """Saves one post to the posts table of database.
@@ -138,7 +140,22 @@ class TickerMentionScanner:
         
         return tuples
     
-    
+    def _calculate_weighted_sentiment(self, posts: list[Post], ticker: str) -> float:
+        """Calculate weighted average sentiment for a ticker.
+
+        Posts with higher engagement have more weight.
+
+        Args:
+            posts (list[Post]): Posts mentioning the ticker.
+            ticker (str): The ticker symbol
+
+        Returns:
+            float: Weighted sentiment score between -1 and 1
+        """
+        if not posts: 
+            return 0.0
+        
+
         
     #Counts mentions of valid tickers into list of MentionDataPoint objects
     def process_mentions(self, post_list: list[Post]) -> list[MentionDataPoint]:
@@ -175,16 +192,19 @@ class TickerMentionScanner:
                             'count': 0,
                             'users': set(),
                             'total_score': 0,
-                            'total_comments': 0
+                            'total_comments': 0,
+                            'posts': []
                         }
                     mention_data[key]['count'] += 1
                     mention_data[key]['users'].add(post.user_id)
                     mention_data[key]['total_score'] += post.score
                     mention_data[key]['total_comments'] += post.num_comments
+                    mention_data[key]['posts'].append(post)
             
         logger.info(f"{len(posts_to_process)} New posts processed")
         
         # Convert mention_data dictionary to list of MentionDataPoint objects
+        #avg_sentiment = self.mention_analyser.calculate_weighted_sentiment(data['posts', ticker])
         mention_data_points = [
             MentionDataPoint(
                 ticker=ticker,
@@ -194,7 +214,7 @@ class TickerMentionScanner:
                 unique_users=len(data['users']),
                 total_score=data['total_score'],
                 total_comments=data['total_comments'],
-                avg_sentiment=0.0  # Placeholder - sentiment analysis not yet implemented
+                avg_sentiment=self.mention_analyser.calculate_weighted_sentiment(data['posts'], ticker)
             )
             for (ticker, subreddit), data in mention_data.items()
         ]
