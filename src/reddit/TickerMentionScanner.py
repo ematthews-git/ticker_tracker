@@ -137,6 +137,8 @@ class TickerMentionScanner:
                              post.score, post.upvote_ratio, post.num_comments, post.author_quality))
         
         return tuples
+    
+    
         
     #Counts mentions of valid tickers into list of MentionDataPoint objects
     def process_mentions(self, post_list: list[Post]) -> list[MentionDataPoint]:
@@ -201,7 +203,7 @@ class TickerMentionScanner:
     
     def _get_existing_posts_ids(self) -> set:
         """Gets set of all post IDs already in the database
-        
+
         Returns:
             set: all post IDs
         """
