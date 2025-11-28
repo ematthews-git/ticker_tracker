@@ -37,6 +37,8 @@ def main():
             print("*" * 50)
             print("3: Emerging tickers")
             print("*" * 50)
+            visualiser.display_growth_tickers()
+            continue
 
 def display_emerging_tickers():
     pass

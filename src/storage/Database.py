@@ -252,108 +252,107 @@ def upsert_author_data(connection_pool, author: Author) -> None:
         connection_pool.putconn(conn)
 
 
-def fetch_growth_tickers(connection_pool) -> dict[str, list[MentionDataPoint]]:
+def fetch_growth_tickers(connection_pool, start_date: datetime, end_date: datetime, amount: int=10) -> dict[str, tuple[float, list[MentionDataPoint]]]:
+    """Gets tickers with the highest growth in mentions between two time periods.
+    
+    Compares the first half of the date range to the second half to calculate growth.
+    Growth is calculated as: (recent_mentions - older_mentions) / older_mentions * 100
+    
+    Args:
+        connection_pool: The PostgreSQL connection pool.
+        start_date (datetime): The start of the date range to query.
+        end_date (datetime): The end of the date range to query.
+        amount (int, optional): The number of tickers to be returned. Defaults to 10.
 
+    Returns:
+        dict[str, tuple[float, list[MentionDataPoint]]]: Maps a ticker to a tuple of (growth_rate, mention_points),
+                                                          ordered where the first index has the highest growth.
+    """
     conn = connection_pool.getconn()
     cursor = conn.cursor()
 
     try:
-        # Get tickers with positive growth in mentions
-        # This is a placeholder for more complex logic
-        cursor.execute("""
-            SELECT ticker, SUM(mention_count) as total_mentions
-            FROM mentions
-            GROUP BY ticker
-            ORDER BY total_mentions DESC
-            LIMIT 5
-        """)
+        # Calculate midpoint to split the date range in half
+        time_diff = end_date - start_date
+        midpoint = start_date + (time_diff / 2)
         
-        # For now just return empty dict as this seems to be a work in progress
-        return {}
+        # Query to calculate growth for each ticker
+        cursor.execute("""
+            WITH period_mentions AS (
+                SELECT
+                    ticker,
+                    CASE 
+                        WHEN timestamp < %s THEN 'older'
+                        ELSE 'recent'
+                    END AS period,
+                    SUM(mention_count) AS total_mentions
+                FROM mentions
+                WHERE timestamp BETWEEN %s AND %s
+                GROUP BY ticker, period
+            ),
+            growth_calc AS (
+                SELECT
+                    ticker,
+                    MAX(CASE WHEN period = 'older' THEN total_mentions ELSE 0 END) AS older_mentions,
+                    MAX(CASE WHEN period = 'recent' THEN total_mentions ELSE 0 END) AS recent_mentions
+                FROM period_mentions
+                GROUP BY ticker
+            ),
+            ticker_growth AS (
+                SELECT
+                    ticker,
+                    older_mentions,
+                    recent_mentions,
+                    CASE 
+                        WHEN older_mentions = 0 AND recent_mentions > 0 THEN 999999
+                        WHEN older_mentions = 0 THEN 0
+                        ELSE ((recent_mentions - older_mentions)::FLOAT / older_mentions * 100)
+                    END AS growth_rate
+                FROM growth_calc
+                WHERE recent_mentions > 0  -- Only include tickers with recent activity
+                ORDER BY growth_rate DESC
+                LIMIT %s
+            )
+            SELECT m.ticker, m.subreddit, m.timestamp, m.mention_count, m.unique_users, 
+                   m.total_score, m.total_comments, m.avg_sentiment, tg.growth_rate
+            FROM mentions m
+            JOIN ticker_growth tg ON m.ticker = tg.ticker
+            WHERE m.timestamp BETWEEN %s AND %s
+            ORDER BY tg.growth_rate DESC, m.ticker, m.timestamp;
+        """, (midpoint, start_date, end_date, amount, start_date, end_date))
+
+        rows = cursor.fetchall()
+        logger.debug(f"Growth query returned {len(rows)} rows")
+        result = dict()
+        ticker_growth_rates = {}  # Store growth rate for each ticker
+
+        # Construct return object
+        for ticker, subreddit, timestamp, count, unique_users, total_score, total_comments, avg_sentiment, growth_rate in rows:
+            dp = MentionDataPoint(
+                ticker=ticker,
+                subreddit=subreddit,
+                timestamp=timestamp,
+                mention_count=int(count),
+                unique_users=int(unique_users),
+                total_score=int(total_score),
+                total_comments=int(total_comments),
+                avg_sentiment=float(avg_sentiment)
+            )
+            if ticker not in result:
+                result[ticker] = []
+                ticker_growth_rates[ticker] = float(growth_rate)
+            result[ticker].append(dp)
+        
+        # Convert result to include growth rates
+        final_result = {
+            ticker: (ticker_growth_rates[ticker], mention_points)
+            for ticker, mention_points in result.items()
+        }
+        
+        return final_result
     except Exception as e:
         logger.error(f"Error fetching growth tickers: {e}")
-        return {}
-    finally:
-        cursor.close()
-        connection_pool.putconn(conn)
-
-def get_authors_batch(connection_pool, usernames: list[str]) -> dict[str, Author]:
-    """Get cached author data for a list of usernames.
-    
-    Args:
-        connection_pool: The PostgreSQL connection pool.
-        usernames (list[str]): List of usernames to look up.
-        
-    Returns:
-        dict[str, Author]: Dictionary mapping username to Author object for found authors.
-    """
-    if not usernames:
-        return {}
-        
-    conn = connection_pool.getconn()
-    cursor = conn.cursor()
-    
-    try:
-        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
-        
-        # Use ANY for batch selection
-        cursor.execute("""
-            SELECT username, created_utc, comment_karma, link_karma, last_updated
-            FROM authors
-            WHERE username = ANY(%s) AND last_updated >= %s
-        """, (usernames, seven_days_ago))
-        
-        results = {}
-        for row in cursor.fetchall():
-            username_val, created_utc_dt, comment_karma, link_karma, last_updated = row
-            
-            # Handle None values
-            created_utc = created_utc_dt if created_utc_dt is not None else datetime.fromtimestamp(0, tz=timezone.utc)
-            comment_karma_val = comment_karma if comment_karma is not None else 0
-            link_karma_val = link_karma if link_karma is not None else 0
-            last_updated_val = last_updated if last_updated is not None else datetime.now(timezone.utc)
-            
-            results[username_val] = Author(
-                username=username_val,
-                created_utc=created_utc,
-                comment_karma=comment_karma_val,
-                link_karma=link_karma_val,
-                last_updated=last_updated_val
-            )
-            
-        return results
-    except Exception as e:
-        logger.error(f"Error getting batch author data: {e}")
-        return {}
-    finally:
-        cursor.close()
-        connection_pool.putconn(conn)
-
-def get_existing_post_ids_batch(connection_pool, post_ids: list[str]) -> set[str]:
-    """Check which post IDs from the list already exist in the database.
-    
-    Args:
-        connection_pool: The PostgreSQL connection pool.
-        post_ids (list[str]): List of post IDs to check.
-        
-    Returns:
-        set[str]: Set of post IDs that already exist.
-    """
-    if not post_ids:
-        return set()
-        
-    conn = connection_pool.getconn()
-    cursor = conn.cursor()
-    
-    try:
-        cursor.execute("""
-            SELECT post_id FROM posts WHERE post_id = ANY(%s)
-        """, (post_ids,))
-        
-        return {row[0] for row in cursor.fetchall()}
-    except Exception as e:
-        logger.error(f"Error checking existing posts batch: {e}")
-        return set()
+        raise
     finally:
         cursor.close()
         connection_pool.putconn(conn)
