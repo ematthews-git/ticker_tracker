@@ -93,3 +93,29 @@ class Visualiser:
         for ticker, points in popular_tickers.items():
             total_mentions = sum(dp.mention_count for dp in points)
             print(f"{ticker}: {total_mentions}")
+    
+    def display_growth_tickers(self):
+        """Asks the user for parameters and displays the tickers with the highest growth based on those paramters"""
+        try:
+            timeframe = input("Enter timeframe(e.g '12h', '1d', '1w')")
+            now = datetime.now()
+            dif = helper.parse_time_input(timeframe)
+        except Exception as e:
+            print(f"Timeframe formatted incorrectly: {e}")
+            return
+        
+        start_time = now - dif
+
+        amount = int(input("How many tickers would you like to see (min = 10, max = 30)"))
+        if amount > 30: amount = 30
+        elif amount < 10: amount = 10
+
+        growth_tickers = Database.fetch_growth_tickers(self.connection_pool, start_time, now, amount)
+
+        #display
+        for ticker, (growth_rate, mention_points) in growth_tickers.items():
+            total_mentions = sum(dp.mention_count for dp in mention_points)
+            #This ensures the tickers displayed are actually relevant
+            if total_mentions < 4:
+                continue
+            print(f"{ticker}: {growth_rate:.2f}% growth ({total_mentions} total mentions)")
