@@ -72,7 +72,7 @@ class Author:
 
 @dataclass(frozen=True)
 class MentionDataPoint:
-    """Represents a single ticker mention data point
+    """Represents a single ticker mention data point.
     
     Attributes:
         ticker (str): The stock ticker symbol (e.g., 'AAPL').
@@ -93,6 +93,142 @@ class MentionDataPoint:
     total_comments: int
     avg_sentiment: float
 
+@dataclass
+class TickerStats:
+    """Represents a collection of statistics relating to a ticker at a point in time.
+
+    Attributes:
+        ticker (str): Stock ticker symbol (e.g., 'AAPL').
+        timestamp (datetime): Time point these statistics represent.
+        
+        # Mention metrics
+        mention_count (int): Total mentions in the period.
+        mention_zscore (Optional[float]): Z-score for mentions (-∞ to +∞, typically -3 to +3).
+        mention_velocity (float): Rate of change in mentions per hour.
+        
+        # Sentiment metrics
+        avg_sentiment (float): Average sentiment score (-1 to 1).
+        sentiment_zscore (Optional[float]): Z-score for sentiment.
+        
+        # Engagement metrics
+        unique_users (int): Number of unique users mentioning ticker.
+        total_score (int): Sum of post scores (upvotes - downvotes).
+        total_comments (int): Sum of comment counts.
+        subreddit_diversity (int): Number of unique subreddits.
+        
+        # Anomaly flags
+        spike_detected (bool): Whether a sudden spike was detected.
+    """
+    ticker: str
+    timestamp: datetime
+    
+    # Mention metrics
+    mention_count: int
+    mention_zscore: Optional[float]
+    mention_velocity: float
+    
+    # Sentiment metrics
+    avg_sentiment: float
+    sentiment_zscore: Optional[float]
+    
+    # Engagement metrics
+    unique_users: int
+    total_score: int
+    total_comments: int
+    subreddit_diversity: int
+    
+    # Anomaly flags
+    spike_detected: bool
+
+    def is_anomalous(self, mention_threshold: float = 2.0, sentiment_threshold: float = 1.5, velocity_threshold: float = 5.0) -> bool:
+        """Check if this ticker shows anomalous activity.
+        
+        Args:
+            mention_threshold: Minimum Z-score for mentions.
+            sentiment_threshold: Minimum Z-score for sentiment (absolute value).
+            velocity_threshold: Minimum velocity (mentions/hour).
+            
+        Returns:
+            bool: True if ticker meets any anomaly threshold.
+        """
+        return (
+            (self.mention_zscore is not None and self.mention_zscore >= mention_threshold) or
+            (self.sentiment_zscore is not None and abs(self.sentiment_zscore) >= sentiment_threshold) or
+            (self.mention_velocity >= velocity_threshold) or
+            self.spike_detected
+        )
+    
+    def get_anomaly_reasons(self) -> list[str]:
+        """Get human-readable reasons why this ticker is anomalous.
+        
+        Returns:
+            list[str]: List of reasons (e.g., "High mention Z-score: 3.2").
+        """
+        reasons = []
+        
+        if self.mention_zscore and self.mention_zscore >= 2.0:
+            reasons.append(f"High mention Z-score: {self.mention_zscore:.2f}")
+        
+        if self.sentiment_zscore and abs(self.sentiment_zscore) >= 1.5:
+            direction = "positive" if self.sentiment_zscore > 0 else "negative"
+            reasons.append(f"Unusual {direction} sentiment: {abs(self.sentiment_zscore):.2f}")
+        
+        if self.mention_velocity >= 5.0:
+            reasons.append(f"Accelerating mentions: {self.mention_velocity:.2f}/hour")
+        
+        if self.spike_detected:
+            reasons.append("Sudden spike detected")
+        
+        if self.subreddit_diversity >= 4:
+            reasons.append(f"Broad interest: {self.subreddit_diversity} subreddits")
+        
+        return reasons
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization or database storage.
+        
+        Returns:
+            dict: Dictionary representation.
+        """
+        return {
+            'ticker': self.ticker,
+            'timestamp': self.timestamp.isoformat(),
+            'mention_count': self.mention_count,
+            'mention_zscore': self.mention_zscore,
+            'mention_velocity': self.mention_velocity,
+            'avg_sentiment': self.avg_sentiment,
+            'sentiment_zscore': self.sentiment_zscore,
+            'unique_users': self.unique_users,
+            'total_score': self.total_score,
+            'total_comments': self.total_comments,
+            'subreddit_diversity': self.subreddit_diversity,
+            'spike_detected': self.spike_detected
+        }
+    
+    @classmethod
+    def from_db_row(cls, row: tuple) -> 'TickerStats':
+        """Create TickerStats from database query result.
+        
+        Args:
+            row: Tuple from database query (ticker, timestamp, mention_count, ...).
+            
+        Returns:
+            TickerStats: Instance created from row data.
+        """
+        return cls(
+            ticker=row[0],
+            timestamp=row[1],
+            mention_count=row[2],
+            mention_zscore=row[3],
+            mention_velocity=row[4],
+            avg_sentiment=row[5],
+            sentiment_zscore=row[6],
+            unique_users=row[7],
+            total_score=row[8],
+            total_comments=row[9],
+            subreddit_diversity=row[10],
+            spike_detected=row[11]
+        )
 
 class SentimentCategory(Enum):
     VERY_POSITIVE = "very_positive"
