@@ -1,11 +1,6 @@
 import unittest
 from unittest.mock import Mock, patch, MagicMock, call
 from datetime import datetime, timezone
-import sys
-from pathlib import Path
-
-# Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from storage.database_manager import insert_mention_counts, fetch_ticker_mentions, fetch_popular_tickers
 from models import MentionDataPoint

@@ -1,11 +1,6 @@
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timezone
-import sys
-from pathlib import Path
-
-# Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from reddit.ticker_mention_scanner import TickerMentionScanner
 from models import Post, MentionDataPoint

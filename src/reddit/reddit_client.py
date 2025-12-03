@@ -7,9 +7,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Import database functions for author caching
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 from storage.database_manager import get_author_data, upsert_author_data
 from utils.helper import convert_unix_to_datetime_utc
 from praw.models import Redditor, Submission, Comment

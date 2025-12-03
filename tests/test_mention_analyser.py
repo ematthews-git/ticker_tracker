@@ -1,8 +1,3 @@
-import sys
-from pathlib import Path
-# Add src to path to match application behavior
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 import pytest
 from unittest.mock import MagicMock, patch
 from analysis.mention_analyser import MentionAnalyser

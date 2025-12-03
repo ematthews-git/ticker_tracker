@@ -8,10 +8,6 @@ Usage:
     python statistics_collector.py
 """
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent))
-
 from logging_setup import configure_logging
 import logging
 configure_logging()

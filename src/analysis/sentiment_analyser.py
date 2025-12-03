@@ -2,9 +2,6 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import re
 import logging
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 from models import SentimentCategory
 
 logger = logging.getLogger(__name__)

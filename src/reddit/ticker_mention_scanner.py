@@ -2,12 +2,7 @@ import re
 import sqlite3
 import psycopg2
 from psycopg2.extras import execute_batch
-import sys
-from pathlib import Path
 from datetime import datetime, timezone
-
-# Add parent directory to path to import config and models
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models import Post, MentionDataPoint
 from storage.database_manager import get_existing_post_ids_batch
