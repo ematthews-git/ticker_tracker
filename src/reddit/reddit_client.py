@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from storage.Database import get_author_data, upsert_author_data
+from storage.database_manager import get_author_data, upsert_author_data
 from utils.helper import convert_unix_to_datetime_utc
 from praw.models import Redditor, Submission, Comment
 
@@ -204,7 +204,7 @@ class RedditClient:
         #Get all authors which are in the cache
         cached_authors = {}
         if self.connection_pool and author_names:
-            from storage.Database import get_authors_batch
+            from storage.database_manager import get_authors_batch
             cached_authors = get_authors_batch(self.connection_pool, list(author_names))
             logger.debug(f"Batch cache hit for {len(cached_authors)}/{len(author_names)} authors")
         
