@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models import MentionDataPoint, TickerStats
-from storage import Database
+from storage import database_manager
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class StatisticalAnalyser:
         start_time = current_time - timedelta(days=window_days)
 
         #Fetch historical data
-        mentions = Database.fetch_ticker_mentions(self.connection_pool, ticker, start_time, end_time)
+        mentions = database_manager.fetch_ticker_mentions(self.connection_pool, ticker, start_time, end_time)
 
         if len(mentions) < DATA_SUFFICIENCY_VAL:
             logger.warning(f"Insufficient data for {ticker} Z-score calculation")
@@ -86,7 +86,7 @@ class StatisticalAnalyser:
         end_time = current_time
         start_time = current_time - timedelta(days=window_days)
         
-        mentions = Database.fetch_ticker_mentions(self.connection_pool, ticker, start_time, end_time)
+        mentions = database_manager.fetch_ticker_mentions(self.connection_pool, ticker, start_time, end_time)
         
         if len(mentions) < DATA_SUFFICIENCY_VAL:
             return None
@@ -124,7 +124,7 @@ class StatisticalAnalyser:
         end_time = current_time
         start_time = current_time - timedelta(hours=lookback_hours)
 
-        mentions = Database.fetch_ticker_mentions(
+        mentions = database_manager.fetch_ticker_mentions(
             self.connection_pool,
             ticker,
             start_time,
@@ -166,7 +166,7 @@ class StatisticalAnalyser:
         end_time = current_time
         start_time = current_time - timedelta(hours=lookback_hours)
         
-        mentions = Database.fetch_ticker_mentions(
+        mentions = database_manager.fetch_ticker_mentions(
             self.connection_pool,
             ticker,
             start_time,
@@ -206,7 +206,7 @@ class StatisticalAnalyser:
                 diversity = self.calculate_subreddit_diversity(ticker, current_time)
 
                 #get recent mention stats
-                recent_mentions = Database.fetch_ticker_mentions(self.connection_pool, ticker, start_time, end_time)
+                recent_mentions = database_manager.fetch_ticker_mentions(self.connection_pool, ticker, start_time, end_time)
 
                 total_mentions = sum(m.mention_count for m in recent_mentions)
                 avg_sentiment = float(np.mean([m.avg_sentiment for m in recent_mentions]))
@@ -279,8 +279,8 @@ class StatisticalAnalyser:
         baseline_end = recent_start
         baseline_start = baseline_end - timedelta(hours=lookback_hours)
 
-        recent_mentions = Database.fetch_ticker_mentions(self.connection_pool, ticker, recent_start, recent_end)
-        baseline_mentions = Database.fetch_ticker_mentions(self.connection_pool, ticker, baseline_start, baseline_end)
+        recent_mentions = database_manager.fetch_ticker_mentions(self.connection_pool, ticker, recent_start, recent_end)
+        baseline_mentions = database_manager.fetch_ticker_mentions(self.connection_pool, ticker, baseline_start, baseline_end)
 
         recent_count = sum(m.mention_count for m in recent_mentions)
         baseline_count = sum(m.mention_count for m in baseline_mentions)
@@ -318,7 +318,7 @@ class StatisticalAnalyser:
         
         # Get recent mention data
         start_time = current_time - timedelta(hours=24)
-        recent_mentions = Database.fetch_ticker_mentions(
+        recent_mentions = database_manager.fetch_ticker_mentions(
             self.connection_pool,
             ticker,
             start_time,
