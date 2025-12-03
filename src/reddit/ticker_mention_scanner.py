@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models import Post, MentionDataPoint
-from storage.Database import get_existing_post_ids_batch
+from storage.database_manager import get_existing_post_ids_batch
 from analysis.mention_analyser import MentionAnalyser
 
 import logging
