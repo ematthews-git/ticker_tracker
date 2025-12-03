@@ -7,7 +7,7 @@ from pathlib import Path
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from storage.Database import insert_mention_counts, fetch_ticker_mentions, fetch_popular_tickers
+from storage.database_manager import insert_mention_counts, fetch_ticker_mentions, fetch_popular_tickers
 from models import MentionDataPoint
 
 
@@ -487,7 +487,7 @@ class TestAuthorData(TestDatabase):
             "test_user", now, 100, 200, now
         )
 
-        from storage.Database import get_author_data
+        from storage.database_manager import get_author_data
         result = get_author_data(mock_pool, "test_user")
 
         self.assertIsNotNone(result)
@@ -506,7 +506,7 @@ class TestAuthorData(TestDatabase):
 
         mock_cursor.fetchone.return_value = None
 
-        from storage.Database import get_author_data
+        from storage.database_manager import get_author_data
         result = get_author_data(mock_pool, "test_user")
 
         self.assertIsNone(result)
@@ -527,7 +527,7 @@ class TestAuthorData(TestDatabase):
             last_updated=datetime.now(timezone.utc)
         )
 
-        from storage.Database import upsert_author_data
+        from storage.database_manager import upsert_author_data
         upsert_author_data(mock_pool, author)
 
         mock_cursor.execute.assert_called_once()
@@ -548,7 +548,7 @@ class TestAuthorData(TestDatabase):
             ("user2", now, 30, 40, now)
         ]
 
-        from storage.Database import get_authors_batch
+        from storage.database_manager import get_authors_batch
         results = get_authors_batch(mock_pool, ["user1", "user2"])
 
         self.assertEqual(len(results), 2)
@@ -565,7 +565,7 @@ class TestAuthorData(TestDatabase):
 
         mock_cursor.fetchall.return_value = [("post1",), ("post3",)]
 
-        from storage.Database import get_existing_post_ids_batch
+        from storage.database_manager import get_existing_post_ids_batch
         results = get_existing_post_ids_batch(mock_pool, ["post1", "post2", "post3"])
 
         self.assertEqual(len(results), 2)
