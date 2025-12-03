@@ -1,13 +1,20 @@
 from setuptools import setup, find_packages
+from setuptools.command.install import install
+import os
+import shutil
+
+# Find all packages in src/
+packages = find_packages(where="src")
 
 setup(
     name="ticker-tracker",
     version="0.1.0",
     description="Reddit ticker mention tracker and analyzer",
-    author="Your Name",
-    author_email="your.email@example.com",
-    packages=find_packages(where="src"),
+    author="Ethan Matthews",
+    author_email="matthewsethan43@gmail.com",
+    packages=packages,
     package_dir={"": "src"},
+    include_package_data=True,
     python_requires=">=3.8",
     install_requires=[
         "praw>=7.7.0",
