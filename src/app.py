@@ -8,13 +8,13 @@ from pathlib import Path
 # Add src directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from reddit.RedditClient import RedditClient
-from reddit.TickerMentionScanner import TickerMentionScanner
+from reddit.reddit_client import RedditClient
+from reddit.ticker_mention_scanner import TickerMentionScanner
 from config import CLIENT_ID, CLIENT_SECRET, USER_AGENT, VALID, DB_URL, SUBREDDITS
 import schedule
 from datetime import datetime, timezone
 import time
-from storage.Database import insert_mention_counts
+from storage.database_manager import insert_mention_counts
 from psycopg2.pool import SimpleConnectionPool
 
 pool = SimpleConnectionPool(
