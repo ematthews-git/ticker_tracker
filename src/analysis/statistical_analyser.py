@@ -4,10 +4,6 @@ from collections import defaultdict
 from typing import Optional
 import logging
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from models import MentionDataPoint, TickerStats
 from storage import database_manager
 

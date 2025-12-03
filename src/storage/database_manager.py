@@ -1,12 +1,7 @@
 from datetime import datetime, timedelta, timezone
-import sys
-from pathlib import Path
 import psycopg2
 from psycopg2.extras import execute_batch
 from typing import Optional, Tuple
-
-# Add parent directory to path to import models
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models import MentionDataPoint, Author
 import logging

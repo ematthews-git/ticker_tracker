@@ -12,6 +12,7 @@ def main():
         print("1: Enter ticker to graph it")
         print("2: List most popular tickers")
         print("3: Find new tickers")
+        print("4: Show highest z-scores")
         print("9: Exit")
 
         entry = input("Enter number: ")
@@ -24,21 +25,23 @@ def main():
             ticker = input("Enter desired ticker(e.g 'ABC'): ")
             visualiser.graph_ticker(ticker)
             print("Graphing complete")
-            entry = ' '
-            continue
         elif entry == "2":
             print("*" * 50)
             print("2: List most popular tickers")
             print("*" * 50)
             visualiser.display_popular_tickers()
-            entry = ''
-            continue
         elif entry == "3":
             print("*" * 50)
             print("3: Emerging tickers")
             print("*" * 50)
             visualiser.display_growth_tickers()
-            continue
+        elif entry == "4":
+            print("*" * 50)
+            print("4: Hottest tickers")
+            print("*" * 50)
+            visualiser.display_hot_tickers()
+
+
 
 def display_emerging_tickers():
     pass

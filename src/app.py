@@ -2,12 +2,6 @@ from logging_setup import configure_logging
 import logging
 configure_logging()
 
-import sys
-from pathlib import Path
-
-# Add src directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
 from reddit.reddit_client import RedditClient
 from reddit.ticker_mention_scanner import TickerMentionScanner
 from config import CLIENT_ID, CLIENT_SECRET, USER_AGENT, VALID, DB_URL, SUBREDDITS
