@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import DB_URL, SUBREDDITS
 from models import MentionDataPoint
-from storage import Database
+from storage import database_manager
 from utils import helper
 from psycopg2.pool import SimpleConnectionPool
 
@@ -40,7 +40,7 @@ class Visualiser:
                 print(f"Timeframe formatted incorrectly: {e}")
                 return
 
-            plot_points = list(Database.fetch_ticker_mentions(self.connection_pool, ticker, start_time, now))
+            plot_points = list(database_manager.fetch_ticker_mentions(self.connection_pool, ticker, start_time, now))
 
             #Convert to dataframe
             df = pd.DataFrame([
@@ -87,7 +87,7 @@ class Visualiser:
         if amount > 30: amount = 30
         elif amount < 10: amount = 10
 
-        popular_tickers = Database.fetch_popular_tickers(self.connection_pool, start_time, now, amount)
+        popular_tickers = database_manager.fetch_popular_tickers(self.connection_pool, start_time, now, amount)
 
         #displaying
         for ticker, points in popular_tickers.items():
@@ -110,7 +110,7 @@ class Visualiser:
         if amount > 30: amount = 30
         elif amount < 10: amount = 10
 
-        growth_tickers = Database.fetch_growth_tickers(self.connection_pool, start_time, now, amount)
+        growth_tickers = database_manager.fetch_growth_tickers(self.connection_pool, start_time, now, amount)
 
         #display
         for ticker, (growth_rate, mention_points) in growth_tickers.items():

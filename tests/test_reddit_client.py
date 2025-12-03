@@ -7,7 +7,7 @@ from pathlib import Path
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from reddit.RedditClient import RedditClient
+from reddit.reddit_client import RedditClient
 from models import Post, Author
 
 class TestRedditClient(unittest.TestCase):
