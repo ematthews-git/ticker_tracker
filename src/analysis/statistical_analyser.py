@@ -55,8 +55,8 @@ class StatisticalAnalyser:
         mention_counts = [count for _, count in aggregated]
 
         #calculate stats
-        mean = np.mean(mention_counts)
-        std = np.std(mention_counts, ddof=1)
+        mean = float(np.mean(mention_counts))
+        std = float(np.std(mention_counts, ddof=1))
 
         if std == 0:
             logger.warning(f"Zero standard deviation for {ticker}")
@@ -68,7 +68,7 @@ class StatisticalAnalyser:
         #calculate z
         zscore = (current_count - mean) / std
 
-        return round(zscore, 4)
+        return round(float(zscore), 4)
     
     def calculate_sentiment_zscore(self, ticker: str, current_time: datetime, 
                                    window_days: int = 30, aggregation_hours: int = 1) -> Optional[float]:
@@ -99,8 +99,8 @@ class StatisticalAnalyser:
         
         sentiments = [sentiment for _, sentiment in aggregated]
         
-        mean = np.mean(sentiments)
-        std = np.std(sentiments, ddof=1)
+        mean = float(np.mean(sentiments))
+        std = float(np.std(sentiments, ddof=1))
         
         if std == 0:
             return 0.0
@@ -108,7 +108,7 @@ class StatisticalAnalyser:
         current_sentiment = sentiments[-1]
         zscore = (current_sentiment - mean) / std
         
-        return round(zscore, 4)
+        return round(float(zscore), 4)
     
     def calculate_mention_velocity(self, ticker: str, current_time: datetime, lookback_hours: int = 24) -> float:
         """Calculate the rate of change in mentions (mentions / hour)
@@ -178,7 +178,7 @@ class StatisticalAnalyser:
     
     def identify_anomalous_tickers(self, current_time: datetime,
                                    mention_zscore_threshold: float = 2.0, sentiment_zscore_threshold: float = 2.0,
-                                   velocity_threshold: float = 5.0, min_mentions: int = 10) -> list[dict]:
+                                   velocity_threshold: float = 5.0, min_mentions: int = 10) -> list[TickerStats]:
         """Identify tickers with anomalous activity across multiple metrics.
         
         Args:
@@ -209,7 +209,7 @@ class StatisticalAnalyser:
                 recent_mentions = Database.fetch_ticker_mentions(self.connection_pool, ticker, start_time, end_time)
 
                 total_mentions = sum(m.mention_count for m in recent_mentions)
-                avg_sentiment = np.mean([m.avg_sentiment for m in recent_mentions])
+                avg_sentiment = float(np.mean([m.avg_sentiment for m in recent_mentions]))
 
                 #check criteria
                 is_anomalous = (
