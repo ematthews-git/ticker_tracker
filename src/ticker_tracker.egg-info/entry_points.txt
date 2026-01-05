@@ -1,0 +1,4 @@
+[console_scripts]
+ticker-statistics = statistics_collector:main
+ticker-tracker = app:main
+ticker-visualiser = user_interaction.console_runner:main

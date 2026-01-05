@@ -30,6 +30,7 @@ setup(
         "console_scripts": [
             "ticker-tracker=app:main",
             "ticker-statistics=statistics_collector:main",
+            "ticker-visualiser=user_interaction.console_runner:main",
         ],
     },
 )
