@@ -1,4 +1,4 @@
-from visualiser import Visualiser
+from .visualiser import Visualiser
 
 def main():
     print("=" * 50)
