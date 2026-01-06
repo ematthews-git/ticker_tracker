@@ -210,7 +210,7 @@ class TestTickerMentionScanner(unittest.TestCase):
         ]
         
         # Mock that 'existing1' is already in database
-        with patch('reddit.TickerMentionScanner.get_existing_post_ids_batch', 
+        with patch('reddit.ticker_mention_scanner.get_existing_post_ids_batch', 
                          return_value={'existing1'}):
             with patch.object(self.scanner, '_batch_save_posts') as mock_save:
                 result = self.scanner.process_mentions(posts)

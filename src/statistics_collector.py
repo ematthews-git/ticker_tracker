@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import DB_URL
 from analysis.statistical_analyser import StatisticalAnalyser
 from models import TickerStats
+from utils import helper
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,8 @@ class StatisticsCollector:
         from datetime import timedelta
         start_time = current_time - timedelta(hours=24)
         
-        active_tickers = self.analyser._get_active_tickers(
+        active_tickers = helper.get_active_tickers(
+            self.connection_pool,
             start_time, 
             current_time,
             min_mentions=5  # Lower threshold for statistics collection

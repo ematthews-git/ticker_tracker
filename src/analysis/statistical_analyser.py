@@ -6,6 +6,7 @@ import logging
 
 from models import MentionDataPoint, TickerStats
 from storage import database_manager
+from utils import helper
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +191,7 @@ class StatisticalAnalyser:
         end_time = current_time
         start_time = current_time - timedelta(hours=24)
 
-        tickers = self._get_active_tickers(start_time, end_time, min_mentions)
+        tickers = helper.get_active_tickers(self.connection_pool, start_time, end_time, min_mentions)
 
         anomalous = []
         for ticker in tickers:
@@ -427,33 +428,4 @@ class StatisticalAnalyser:
         
         return result
     
-    def _get_active_tickers(self, start_time: datetime, end_time: datetime, min_mentions: int = 10) -> list[str]:
-        """Get list of tickers with activity in the time period.
-        
-        Args:
-            start_time: Start of time range.
-            end_time: End of time range.
-            min_mentions: Minimum mentions to be considered active.
-            
-        Returns:
-            List of ticker symbols
-        """
-        conn = self.connection_pool.getconn()
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute("""
-                SELECT ticker, SUM(mention_count) as total
-                FROM mentions
-                WHERE timestamp BETWEEN %s AND %s
-                GROUP BY ticker
-                HAVING SUM(mention_count) >= %s
-                ORDER BY total DESC
-            """, (start_time, end_time, min_mentions))
-            
-            tickers = [row[0] for row in cursor.fetchall()]
-            return tickers
-            
-        finally:
-            cursor.close()
-            self.connection_pool.putconn(conn)
+    
