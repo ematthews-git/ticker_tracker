@@ -31,7 +31,7 @@ class TestDatabase(unittest.TestCase):
 class TestInsertMentionCounts(TestDatabase):
     """Test suite for insert_mention_counts function"""
 
-    @patch('storage.Database.execute_batch')
+    @patch('storage.database_manager.execute_batch')
     def test_inserts_single_mention(self, mock_execute_batch):
         """Test inserting a single MentionDataPoint"""
         mock_conn = MagicMock()
@@ -74,7 +74,7 @@ class TestInsertMentionCounts(TestDatabase):
         mock_cursor.close.assert_called_once()
         mock_pool.putconn.assert_called_once_with(mock_conn)
 
-    @patch('storage.Database.execute_batch')
+    @patch('storage.database_manager.execute_batch')
     def test_inserts_multiple_mentions(self, mock_execute_batch):
         """Test inserting multiple MentionDataPoints"""
         mock_conn = MagicMock()
@@ -114,7 +114,7 @@ class TestInsertMentionCounts(TestDatabase):
         # Should not get connection from pool
         mock_pool.getconn.assert_not_called()
 
-    @patch('storage.Database.execute_batch')
+    @patch('storage.database_manager.execute_batch')
     def test_uppercases_ticker(self, mock_execute_batch):
         """Test that ticker is converted to uppercase"""
         mock_conn = MagicMock()
@@ -140,8 +140,8 @@ class TestInsertMentionCounts(TestDatabase):
         data = call_args[0][2]
         self.assertEqual(data[0][0], 'AAPL')  # Should be uppercase
 
-    @patch('storage.Database.execute_batch')
-    @patch('storage.Database.logger')
+    @patch('storage.database_manager.execute_batch')
+    @patch('storage.database_manager.logger')
     def test_handles_database_error(self, mock_logger, mock_execute_batch):
         """Test error handling when database operation fails"""
         mock_conn = MagicMock()
@@ -276,7 +276,7 @@ class TestFetchTickerMentions(TestDatabase):
         self.assertEqual(result[0].avg_sentiment, 0.5)
         self.assertIsInstance(result[0].avg_sentiment, float)
 
-    @patch('storage.Database.logger')
+    @patch('storage.database_manager.logger')
     def test_handles_database_error(self, mock_logger):
         """Test error handling when database query fails"""
         mock_conn = MagicMock()
@@ -417,7 +417,7 @@ class TestFetchPopularTickers(TestDatabase):
         self.assertIn('AAPL', result)
         self.assertEqual(len(result['AAPL']), 3)
 
-    @patch('storage.Database.logger')
+    @patch('storage.database_manager.logger')
     def test_handles_database_error(self, mock_logger):
         """Test error handling when database query fails"""
         mock_conn = MagicMock()
@@ -439,7 +439,7 @@ class TestFetchPopularTickers(TestDatabase):
         mock_cursor.close.assert_called_once()
         mock_pool.putconn.assert_called_once_with(mock_conn)
 
-    @patch('storage.Database.logger')
+    @patch('storage.database_manager.logger')
     def test_logs_debug_info(self, mock_logger):
         """Test that debug logging occurs"""
         mock_conn = MagicMock()

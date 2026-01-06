@@ -30,7 +30,7 @@ class TestRedditClient(unittest.TestCase):
         self.assertEqual(self.client.connection_pool, self.mock_pool)
         self.assertIsNotNone(self.client.reddit)
 
-    @patch('reddit.RedditClient.get_author_data')
+    @patch('reddit.reddit_client.get_author_data')
     def test_get_author_data_cache_hit(self, mock_get_author_data):
         """Test _get_author_data_from_cache_or_api with cache hit"""
         # Setup
@@ -56,7 +56,7 @@ class TestRedditClient(unittest.TestCase):
         mock_get_author_data.assert_called_once_with(self.mock_pool, "test_user")
         self.assertEqual(len(authors_to_cache), 0) # Should not add to cache list if hit
 
-    @patch('reddit.RedditClient.get_author_data')
+    @patch('reddit.reddit_client.get_author_data')
     def test_get_author_data_cache_miss(self, mock_get_author_data):
         """Test _get_author_data_from_cache_or_api with cache miss"""
         # Setup
@@ -87,8 +87,8 @@ class TestRedditClient(unittest.TestCase):
         self.assertEqual(result.username, "[DELETED]")
         self.assertEqual(len(authors_to_cache), 0)
 
-    @patch('storage.Database.get_authors_batch')
-    @patch('reddit.RedditClient.RedditClient._batch_upsert_authors')
+    @patch('storage.database_manager.get_authors_batch')
+    @patch('reddit.reddit_client.RedditClient._batch_upsert_authors')
     def test_fetch_recent_posts(self, mock_batch_upsert, mock_get_authors_batch):
         """Test fetch_recent_posts yielding posts"""
         # Setup mocks

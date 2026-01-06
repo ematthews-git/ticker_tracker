@@ -41,4 +41,36 @@ def parse_time_input(timeframe: str) -> timedelta:
 
 def convert_unix_to_datetime_utc(unix_utc: Optional[float]) -> Optional[datetime]:
     """Convert UNIX timestamp to UTC datetime, or None if missing."""
-    return datetime.fromtimestamp(unix_utc, tz=timezone.utc) if unix_utc is not None else None   
+    return datetime.fromtimestamp(unix_utc, tz=timezone.utc) if unix_utc is not None else None 
+
+def get_active_tickers(connection_pool, start_time: datetime, end_time: datetime, min_mentions: int = 10) -> list[str]:
+        """Get list of tickers with activity in the time period.
+        
+        Args:
+            connection_pool: The connection pool.
+            start_time: Start of time range.
+            end_time: End of time range.
+            min_mentions: Minimum mentions to be considered active.
+            
+        Returns:
+            List of ticker symbols
+        """
+        conn = connection_pool.getconn()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("""
+                SELECT ticker, SUM(mention_count) as total
+                FROM mentions
+                WHERE timestamp BETWEEN %s AND %s
+                GROUP BY ticker
+                HAVING SUM(mention_count) >= %s
+                ORDER BY total DESC
+            """, (start_time, end_time, min_mentions))
+            
+            tickers = [row[0] for row in cursor.fetchall()]
+            return tickers
+            
+        finally:
+            cursor.close()
+            connection_pool.putconn(conn)
