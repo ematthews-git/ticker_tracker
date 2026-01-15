@@ -86,6 +86,30 @@ def create_database_postgres(db_url):
         ON authors(last_updated DESC);
     """)
 
+    #stock_prices table for storing hourly OHLCV data
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS stock_prices (
+                   ticker TEXT NOT NULL,
+                   timestamp TIMESTAMPTZ NOT NULL,
+                   open REAL NOT NULL,
+                   high REAL NOT NULL,
+                   low REAL NOT NULL,
+                   close REAL NOT NULL,
+                   volume BIGINT NOT NULL,
+                   PRIMARY KEY (ticker, timestamp)
+        );
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_stock_prices_ticker_timestamp 
+        ON stock_prices(ticker, timestamp DESC);
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_stock_prices_timestamp 
+        ON stock_prices(timestamp DESC);
+    """)
+
     conn.commit()
     cursor.close()
     conn.close()
