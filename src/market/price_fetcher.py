@@ -275,38 +275,62 @@ class PriceCollector:
         
         try:
             # Prepare data for insertion
+            # Use itertuples() instead of iterrows() for better performance and to avoid Series ambiguity
             data = []
             skipped_count = 0
+            
+            # Ensure we have the expected columns (handle MultiIndex if present)
+            if isinstance(price_data.columns, pd.MultiIndex):
+                # Flatten MultiIndex columns
+                price_data.columns = price_data.columns.get_level_values(-1)
+            
             for timestamp, row in price_data.iterrows():
-                # Skip rows with NaN values in critical fields
-                if pd.isna(row['Open']) or pd.isna(row['High']) or pd.isna(row['Low']) or pd.isna(row['Close']):
+                try:
+                    # Get scalar values - use .item() if it's a Series, otherwise use directly
+                    def get_scalar(value):
+                        if isinstance(value, pd.Series):
+                            return value.item() if len(value) == 1 else value.iloc[0]
+                        return value
+                    
+                    open_val = get_scalar(row.get('Open', row.iloc[0] if len(row) > 0 else None))
+                    high_val = get_scalar(row.get('High', row.iloc[1] if len(row) > 1 else None))
+                    low_val = get_scalar(row.get('Low', row.iloc[2] if len(row) > 2 else None))
+                    close_val = get_scalar(row.get('Close', row.iloc[3] if len(row) > 3 else None))
+                    volume_val = get_scalar(row.get('Volume', row.iloc[4] if len(row) > 4 else None))
+                    
+                    # Skip rows with NaN values in critical fields
+                    if (pd.isna(open_val) or pd.isna(high_val) or 
+                        pd.isna(low_val) or pd.isna(close_val)):
+                        skipped_count += 1
+                        continue
+                    
+                    # Convert pandas Timestamp to Python datetime
+                    dt = timestamp.to_pydatetime()
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    
+                    # Round timestamp to the hour (:00) to ensure consistency
+                    dt = dt.replace(minute=0, second=0, microsecond=0)
+                    
+                    # Handle NaN volume (convert to 0)
+                    if pd.isna(volume_val):
+                        volume = 0
+                    else:
+                        volume = int(volume_val)
+                    
+                    data.append((
+                        ticker.upper(),
+                        dt,
+                        float(open_val),
+                        float(high_val),
+                        float(low_val),
+                        float(close_val),
+                        volume
+                    ))
+                except Exception as e:
+                    logger.debug(f"Error processing row for {ticker} at {timestamp}: {e}")
                     skipped_count += 1
                     continue
-                
-                # Convert pandas Timestamp to Python datetime
-                dt = timestamp.to_pydatetime()
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                
-                # Round timestamp to the hour (:00) to ensure consistency
-                dt = dt.replace(minute=0, second=0, microsecond=0)
-                
-                # Handle NaN volume (convert to 0)
-                volume = row['Volume']
-                if pd.isna(volume):
-                    volume = 0
-                else:
-                    volume = int(volume)
-                
-                data.append((
-                    ticker.upper(),
-                    dt,
-                    float(row['Open']),
-                    float(row['High']),
-                    float(row['Low']),
-                    float(row['Close']),
-                    volume
-                ))
             
             # Log skipped rows once if any were skipped
             if skipped_count > 0:
