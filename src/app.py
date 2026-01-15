@@ -56,14 +56,15 @@ def collect_data() -> None:
                     logger.error(f"Exception processing r/{sub}: {e}")
 
         #count mentions and save posts
-        logger.info("Counting ticker mentions...")
+        logger.info(f"Processing {len(all_posts)} total posts/comments for ticker mentions...")
         mention_data_points = scanner.process_mentions(all_posts)
-        logger.info(f"Completed. unique ticker-subreddit combinations: {len(mention_data_points)} \n")
+        logger.info(f"Completed. Found {len(mention_data_points)} unique ticker-subreddit combinations")
 
         #save mentions
         if mention_data_points:
             insert_mention_counts(pool, mention_data_points)
-            logger.info(f"Saved {len(mention_data_points)} items to mentions database \n {'='*50}")
+            total_mentions = sum(mdp.mention_count for mdp in mention_data_points)
+            logger.info(f"Saved {len(mention_data_points)} mention records ({total_mentions} total mentions) to database \n {'='*50}")
         else:
             logger.warning("No ticker mentions found")
 

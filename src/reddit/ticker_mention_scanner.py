@@ -164,6 +164,7 @@ class TickerMentionScanner:
         """
         timestamp = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
         
+        # Only process new posts - if a post already exists, it was already counted
         posts_to_process = self._find_new_posts(post_list)
         new_posts = self._posts_to_tuples(posts_to_process)
 
@@ -171,16 +172,21 @@ class TickerMentionScanner:
         if new_posts:
             self._batch_save_posts(new_posts)
             logger.info(f"{len(new_posts)} New posts saved to database")
+        else:
+            logger.info(f"No new posts to save (all {len(post_list)} posts already exist in database)")
 
-        # Process ticker mentions for new posts
+        # Process ticker mentions for new posts only
         # Track detailed metrics per ticker-subreddit combination
         mention_data = {}  # key: (ticker, subreddit) -> {count, users, total_score, total_comments}
         
+        posts_with_mentions = 0
         for post in posts_to_process:
             #find ticker mentions
             tickers = re.findall(r'\b[A-Z]{2,5}\b', post.text) #captal letters + 2 to 5 characters
+            post_has_mention = False
             for t in tickers:
                 if t in self.valid:
+                    post_has_mention = True
                     key = (t.upper(), post.subreddit)
                     if key not in mention_data:
                         mention_data[key] = {
@@ -196,10 +202,12 @@ class TickerMentionScanner:
                     mention_data[key]['total_comments'] += post.num_comments
                     mention_data[key]['posts'].append(post)
             
-        logger.info(f"{len(posts_to_process)} New posts processed")
+            if post_has_mention:
+                posts_with_mentions += 1
+            
+        logger.info(f"Processed {len(posts_to_process)} new posts, found ticker mentions in {posts_with_mentions} posts")
         
         # Convert mention_data dictionary to list of MentionDataPoint objects
-        #avg_sentiment = self.mention_analyser.calculate_weighted_sentiment(data['posts', ticker])
         mention_data_points = []
         for (ticker, subreddit), data in mention_data.items():
             sentiment = self.mention_analyser.analyse_ticker_sentiment(data['posts'], ticker)
