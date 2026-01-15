@@ -23,6 +23,7 @@ setup(
         "psycopg2-binary>=2.9.0",
         "pandas>=2.3.3",
         "vaderSentiment>=3.3.2",
+        "yfinance>=0.2.0",
         "matplotlib>=3.5.0",
         "numpy>=1.21.0",
     ],
@@ -30,6 +31,7 @@ setup(
         "console_scripts": [
             "ticker-tracker=app:main",
             "ticker-statistics=statistics_collector:main",
+            "ticker-prices=market.price_fetcher:main",
             "ticker-visualiser=user_interaction.console_runner:main",
         ],
     },
