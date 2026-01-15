@@ -204,16 +204,20 @@ class PriceCollector:
         try:
             # Prepare data for insertion
             data = []
+            skipped_count = 0
             for timestamp, row in price_data.iterrows():
                 # Skip rows with NaN values in critical fields
                 if pd.isna(row['Open']) or pd.isna(row['High']) or pd.isna(row['Low']) or pd.isna(row['Close']):
-                    logger.warning(f"Skipping {ticker} at {timestamp} due to NaN price values")
+                    skipped_count += 1
                     continue
                 
                 # Convert pandas Timestamp to Python datetime
                 dt = timestamp.to_pydatetime()
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
+                
+                # Round timestamp to the hour (:00) to ensure consistency
+                dt = dt.replace(minute=0, second=0, microsecond=0)
                 
                 # Handle NaN volume (convert to 0)
                 volume = row['Volume']
@@ -231,6 +235,10 @@ class PriceCollector:
                     float(row['Close']),
                     volume
                 ))
+            
+            # Log skipped rows once if any were skipped
+            if skipped_count > 0:
+                logger.debug(f"Skipped {skipped_count} rows with NaN price values for {ticker}")
             
             execute_batch(cursor, """
                 INSERT INTO stock_prices (ticker, timestamp, open, high, low, close, volume)
