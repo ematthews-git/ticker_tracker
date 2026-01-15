@@ -11,6 +11,7 @@ Requires-Dist: schedule>=1.2.0
 Requires-Dist: psycopg2-binary>=2.9.0
 Requires-Dist: pandas>=2.3.3
 Requires-Dist: vaderSentiment>=3.3.2
+Requires-Dist: yfinance>=0.2.0
 Requires-Dist: matplotlib>=3.5.0
 Requires-Dist: numpy>=1.21.0
 Dynamic: author
