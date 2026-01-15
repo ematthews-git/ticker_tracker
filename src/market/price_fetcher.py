@@ -41,7 +41,7 @@ class PriceCollector:
         """
         if current_time is None:
             current_time = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-
+ 
         logger.info(f"Collecting prices for {current_time}")
 
         # Get all active tickers from the last 24 hours
@@ -81,6 +81,20 @@ class PriceCollector:
             
         logger.info(f"Fetching hourly prices for {len(tickers)} tickers")
         
+        # Convert hours to days for yfinance period parameter
+        # yfinance accepts: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
+        # For hourly data, we need at least 1 day, round up to ensure we get enough data
+        days_needed = max(1, (hours_back + 23) // 24)  # Round up
+        if days_needed <= 5:
+            period = f"{days_needed}d"
+        elif days_needed <= 30:
+            period = "1mo"
+        else:
+            period = "3mo"
+        
+        # Calculate cutoff time to filter data
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours_back)
+        
         results = {}
         failed = []
         
@@ -93,20 +107,26 @@ class PriceCollector:
                 # Fetch data for batch
                 data = yf.download(
                     ticker_str,
-                    period=f"{hours_back}h" if hours_back <= 730 else "30d",
+                    period=period,
                     interval="1h",
                     group_by='ticker',
                     auto_adjust=True,  # Adjusts for splits/dividends
-                    threads=True,
+                    threads=False,  # Disable threading to avoid thread start issues
                     progress=False
                 )
                 
-                # Parse results
+                # Parse results and filter to only include needed hours
                 if len(batch) == 1:
                     # Single ticker returns different structure
                     ticker = batch[0]
                     if not data.empty:
-                        results[ticker] = data
+                        # Filter to only include data after cutoff_time
+                        # Handle timezone-aware and timezone-naive indices
+                        filtered_data = self._filter_by_time(data, cutoff_time)
+                        if not filtered_data.empty:
+                            results[ticker] = filtered_data
+                        else:
+                            failed.append(ticker)
                     else:
                         failed.append(ticker)
                 else:
@@ -115,7 +135,12 @@ class PriceCollector:
                         try:
                             ticker_data = data[ticker]
                             if not ticker_data.empty:
-                                results[ticker] = ticker_data
+                                # Filter to only include data after cutoff_time
+                                filtered_data = self._filter_by_time(ticker_data, cutoff_time)
+                                if not filtered_data.empty:
+                                    results[ticker] = filtered_data
+                                else:
+                                    failed.append(ticker)
                             else:
                                 failed.append(ticker)
                         except KeyError:
@@ -133,6 +158,36 @@ class PriceCollector:
             
         logger.info(f"Successfully fetched data for {len(results)}/{len(tickers)} tickers")
         return results
+    
+    def _filter_by_time(self, data: pd.DataFrame, cutoff_time: datetime) -> pd.DataFrame:
+        """Filter DataFrame to only include rows after cutoff_time.
+        
+        Handles both timezone-aware and timezone-naive indices.
+        
+        Args:
+            data: DataFrame with datetime index
+            cutoff_time: UTC datetime to filter from
+            
+        Returns:
+            Filtered DataFrame
+        """
+        if data.empty:
+            return data
+        
+        # Make a copy to avoid modifying original
+        filtered = data.copy()
+        
+        # Convert index to timezone-aware UTC if needed
+        if filtered.index.tz is None:
+            # Assume timezone-naive indices are in UTC (yfinance typically returns UTC)
+            filtered.index = filtered.index.tz_localize(timezone.utc)
+        else:
+            # Convert to UTC if in different timezone
+            filtered.index = filtered.index.tz_convert(timezone.utc)
+        
+        # Filter to only include data after cutoff_time
+        mask = filtered.index >= cutoff_time
+        return filtered[mask]
     
     def save_prices_to_db(self, ticker: str, price_data) -> None:
         """Save price data to database"""

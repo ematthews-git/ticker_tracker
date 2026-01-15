@@ -1,4 +1,5 @@
 [console_scripts]
+ticker-prices = market.price_fetcher:main
 ticker-statistics = statistics_collector:main
 ticker-tracker = app:main
 ticker-visualiser = user_interaction.console_runner:main
