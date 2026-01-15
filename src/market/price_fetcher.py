@@ -18,7 +18,7 @@ from logging_setup import configure_logging
 import logging
 configure_logging()
 
-from config import DB_URL
+from config import DB_URL, VALID
 from psycopg2.pool import SimpleConnectionPool
 from psycopg2.extras import execute_batch
 from utils import helper
@@ -60,6 +60,18 @@ class PriceCollector:
             logger.warning("No active tickers to fetch prices for")
             return
 
+        # Filter to only valid tickers (if VALID list exists)
+        if VALID:
+            valid_tickers = [t for t in active_tickers if t.upper() in VALID]
+            invalid_count = len(active_tickers) - len(valid_tickers)
+            if invalid_count > 0:
+                logger.info(f"Filtered out {invalid_count} invalid tickers (not in valid_tickers.json)")
+            active_tickers = valid_tickers
+
+        if not active_tickers:
+            logger.warning("No valid tickers to fetch prices for after filtering")
+            return
+
         # Fetch and store prices for all active tickers
         # Fetch 24 hours of data to ensure we have the current hour
         self.fetch_and_store_prices(active_tickers, hours_back=24)
@@ -97,6 +109,7 @@ class PriceCollector:
         
         results = {}
         failed = []
+        failure_reasons = {}  # Track why each ticker failed
         
         batch_size = 10
         for i in range(0, len(tickers), batch_size):
@@ -127,8 +140,10 @@ class PriceCollector:
                             results[ticker] = filtered_data
                         else:
                             failed.append(ticker)
+                            failure_reasons[ticker] = "No data after filtering to cutoff time"
                     else:
                         failed.append(ticker)
+                        failure_reasons[ticker] = "Empty data returned from yfinance"
                 else:
                     # Multiple tickers
                     for ticker in batch:
@@ -141,20 +156,77 @@ class PriceCollector:
                                     results[ticker] = filtered_data
                                 else:
                                     failed.append(ticker)
+                                    failure_reasons[ticker] = "No data after filtering to cutoff time"
                             else:
                                 failed.append(ticker)
+                                failure_reasons[ticker] = "Empty data returned from yfinance"
                         except KeyError:
                             failed.append(ticker)
+                            failure_reasons[ticker] = "Ticker not found in batch response (KeyError)"
                             
                 # Rate limiting - be nice to Yahoo
                 time.sleep(0.5)
                 
             except Exception as e:
-                logger.error(f"Error fetching batch {batch}: {e}", exc_info=True)
-                failed.extend(batch)
-                
+                logger.debug(f"Error fetching batch {batch}: {e}")
+                # Mark all in batch as failed, but try individually as fallback
+                for ticker in batch:
+                    if ticker not in results:
+                        failed.append(ticker)
+                        failure_reasons[ticker] = f"Batch error: {str(e)[:50]}"
+        
+        # Try fetching failed tickers individually as fallback
         if failed:
-            logger.warning(f"Failed to fetch data for {len(failed)} tickers: {failed[:10]}...")
+            logger.info(f"Attempting to fetch {len(failed)} failed tickers individually...")
+            individual_failed = []
+            for ticker in failed[:]:  # Copy list to iterate safely
+                try:
+                    # Try fetching individually
+                    individual_data = yf.download(
+                        ticker,
+                        period=period,
+                        interval="1h",
+                        auto_adjust=True,
+                        threads=False,
+                        progress=False
+                    )
+                    
+                    if not individual_data.empty:
+                        filtered_data = self._filter_by_time(individual_data, cutoff_time)
+                        if not filtered_data.empty:
+                            results[ticker] = filtered_data
+                            failed.remove(ticker)
+                            failure_reasons.pop(ticker, None)
+                            logger.debug(f"Successfully fetched {ticker} individually")
+                            continue
+                    
+                    # Still failed
+                    if ticker not in failure_reasons:
+                        failure_reasons[ticker] = "No hourly data available (empty after individual fetch)"
+                    individual_failed.append(ticker)
+                    
+                except Exception as e:
+                    if ticker not in failure_reasons:
+                        failure_reasons[ticker] = f"Individual fetch error: {str(e)[:50]}"
+                    individual_failed.append(ticker)
+                
+                # Rate limiting for individual fetches
+                time.sleep(0.3)
+        
+        # Log summary of failures
+        if failed:
+            logger.warning(f"Failed to fetch data for {len(failed)} tickers")
+            # Log top failure reasons
+            reason_counts = {}
+            for ticker, reason in failure_reasons.items():
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            
+            logger.info("Failure reasons:")
+            for reason, count in sorted(reason_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
+                logger.info(f"  {reason}: {count} tickers")
+            
+            # Log some example failed tickers
+            logger.debug(f"Example failed tickers: {failed[:20]}")
             
         logger.info(f"Successfully fetched data for {len(results)}/{len(tickers)} tickers")
         return results
