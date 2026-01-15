@@ -205,10 +205,22 @@ class PriceCollector:
             # Prepare data for insertion
             data = []
             for timestamp, row in price_data.iterrows():
+                # Skip rows with NaN values in critical fields
+                if pd.isna(row['Open']) or pd.isna(row['High']) or pd.isna(row['Low']) or pd.isna(row['Close']):
+                    logger.warning(f"Skipping {ticker} at {timestamp} due to NaN price values")
+                    continue
+                
                 # Convert pandas Timestamp to Python datetime
                 dt = timestamp.to_pydatetime()
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
+                
+                # Handle NaN volume (convert to 0)
+                volume = row['Volume']
+                if pd.isna(volume):
+                    volume = 0
+                else:
+                    volume = int(volume)
                 
                 data.append((
                     ticker.upper(),
@@ -217,7 +229,7 @@ class PriceCollector:
                     float(row['High']),
                     float(row['Low']),
                     float(row['Close']),
-                    int(row['Volume'])
+                    volume
                 ))
             
             execute_batch(cursor, """
@@ -444,14 +456,14 @@ def main():
         import schedule
         
         logger.info("Starting continuous price collection (hourly)")
-        print("\nCollecting prices every hour at :30")
+        print("\nCollecting prices every hour on the hour (:00)")
         print("Press Ctrl+C to stop\n")
         
         # Collect now
         collector.collect_and_store_prices()
         
         # Schedule hourly collection
-        schedule.every().hour.at(":30").do(collector.collect_and_store_prices)
+        schedule.every().hour.at(":00").do(collector.collect_and_store_prices)
         
         try:
             while True:
