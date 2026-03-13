@@ -177,7 +177,7 @@ class Visualiser:
             # Show anomaly reasons
             reasons = top.get_anomaly_reasons()
             if reasons:
-                print(f"\nWhy it's anomalous:")
+                print("\nWhy it's anomalous:")
                 for reason in reasons:
                     print(f"  • {reason}")
         
