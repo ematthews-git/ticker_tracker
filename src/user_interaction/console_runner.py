@@ -1,4 +1,5 @@
-from .visualiser import Visualiser
+from user_interaction.visualiser import Visualiser
+
 
 def main():
     print("=" * 50)
@@ -21,7 +22,7 @@ def main():
             print("*" * 50)
             print("1: Enter ticker to graph it")
             print("*" * 50)
-            
+
             ticker = input("Enter desired ticker(e.g 'ABC'): ")
             visualiser.graph_ticker(ticker)
             print("Graphing complete")
@@ -35,17 +36,7 @@ def main():
             print("3: Emerging tickers")
             print("*" * 50)
             visualiser.display_growth_tickers()
-        elif entry == "4":
-            print("*" * 50)
-            print("4: Hottest tickers")
-            print("*" * 50)
-            visualiser.display_hot_tickers()
 
-
-
-def display_emerging_tickers():
-    pass
 
 if __name__ == "__main__":
     main()
-

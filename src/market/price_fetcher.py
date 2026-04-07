@@ -11,19 +11,20 @@ Usage:
 import yfinance as yf
 from datetime import datetime, timedelta, timezone
 import time
-from typing import List, Dict, Any
+from typing import Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-from logging_setup import configure_logging
-import logging
-
-configure_logging()
 
 from config import DB_URL, VALID
 from psycopg2.pool import SimpleConnectionPool
 from psycopg2.extras import execute_batch
 from utils import helper
 import pandas as pd
+
+from logging_setup import configure_logging
+import logging
+
+configure_logging()
+
 
 logger = logging.getLogger(__name__)
 
