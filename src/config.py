@@ -1,21 +1,24 @@
 from dotenv import load_dotenv
 import os
 import json
+from pathlib import Path
 
 load_dotenv()
 
 def load_valid_tickers():
     """Load valid tickers from JSON"""
+    tickers_path = Path(__file__).parent / 'valid_tickers.json'
     try:
-        with open('valid_tickers.json', 'r') as f:
+        with open(tickers_path, 'r') as f:
             return set(json.load(f))
     except FileNotFoundError:
-        print("[WARNING] valid_tickers.json not found")
+        print(f"[WARNING] valid_tickers.json not found at {tickers_path}")
         return set()
 
 VALID = load_valid_tickers()
 
-LOG_PATH = os.getenv("LOG_FILE_PATH", "var/log/reddit-tracker.log")
+_default_log = str(Path.home() / '.ticker_tracker' / 'logs' / 'reddit-tracker.log')
+LOG_PATH = os.getenv("LOG_FILE_PATH", _default_log)
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 #The subreddits being processed

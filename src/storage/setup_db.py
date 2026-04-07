@@ -2,8 +2,6 @@ import psycopg2
 
 from config import DB_URL
 
-print(DB_URL)
-
 
 def create_database_postgres(db_url):
 

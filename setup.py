@@ -15,6 +15,9 @@ setup(
     packages=packages,
     package_dir={"": "src"},
     include_package_data=True,
+    package_data={
+        "": ["valid_tickers.json"],
+    },
     python_requires=">=3.8",
     install_requires=[
         "praw>=7.7.0",
