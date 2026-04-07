@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from models import Post, MentionDataPoint
+from models import Post
 from analysis.sentiment_analyser import SentimentAnalyser
 import logging
 
