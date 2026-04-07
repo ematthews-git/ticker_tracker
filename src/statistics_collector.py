@@ -401,7 +401,7 @@ def main():
     # Create connection pool
     pool = SimpleConnectionPool(
         minconn=1,
-        maxconn=5,
+        maxconn=15,
         dsn=DB_URL
     )
     
