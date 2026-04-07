@@ -1,5 +1,6 @@
 import logging
 from logging.handlers import RotatingFileHandler
+import os
 import sys
 from config import LOG_PATH, LOG_LEVEL
 
@@ -19,6 +20,10 @@ def configure_logging() -> None:
     )
 
     #File handler
+    log_dir = os.path.dirname(os.path.abspath(LOG_PATH))
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+
     file_handler = RotatingFileHandler(
         LOG_PATH,
         maxBytes=5 * 1024 * 1024, #5mb
