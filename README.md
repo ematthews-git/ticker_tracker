@@ -8,7 +8,6 @@ Useful for tracking which tickers are trending across finance subreddits and spo
 
 - **Data collection**: Fetches recent posts and comments from configurable subreddits (e.g. r/pennystocks, r/Daytrading) and scans for ticker symbols.
 - **Sentiment**: Uses VADER to score sentiment per post; aggregates by ticker and subreddit.
-- **Statistics**: Hourly aggregation with mention counts, z-scores, velocity, and spike detection for “anomalous” tickers.
 - **Price data**: Optional hourly collection of OHLCV for active tickers via yfinance.
 - **CLI tools**: Interactive menus to run collection, view popular/emerging/hot tickers, and graph mention trends.
 
@@ -68,19 +67,13 @@ Run from the **project root** so `.env` and `valid_tickers.json` are found.
   ticker-tracker
   ```
 
-- **Statistics collector** (hourly stats and anomaly detection):
-
-  ```bash
-  ticker-statistics
-  ```
-
 - **Price collector** (hourly OHLCV for active tickers):
 
   ```bash
   ticker-prices
   ```
 
-- **Data viewer / visualiser** (graphs, popular tickers, emerging/hot tickers):
+- **Data viewer / visualiser** (graphs, popular tickers, hot tickers):
 
   ```bash
   ticker-visualiser
