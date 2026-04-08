@@ -33,7 +33,6 @@ setup(
     entry_points={
         "console_scripts": [
             "ticker-tracker=app:main",
-            "ticker-statistics=statistics_collector:main",
             "ticker-prices=market.price_fetcher:main",
             "ticker-visualiser=user_interaction.console_runner:main",
         ],
