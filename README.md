@@ -106,4 +106,4 @@ python run_tests.py
 
 ## License
 
-MIT (or add your preferred license).
+Licensed under MIT. See LICENSE for details.
