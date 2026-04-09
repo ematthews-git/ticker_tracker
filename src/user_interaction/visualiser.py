@@ -1,10 +1,8 @@
 from matplotlib import pyplot as plt
-import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from config import DB_URL, SUBREDDITS
-from models import MentionDataPoint, TickerStats
 from storage import database_manager
 from utils import helper
 from psycopg2.pool import SimpleConnectionPool
@@ -108,7 +106,7 @@ class Visualiser:
         """Asks the user for parameters and displays the tickers with the highest growth based on those paramters"""
         try:
             timeframe = input("Enter timeframe(e.g '12h', '1d', '1w')")
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
             dif = helper.parse_time_input(timeframe)
         except Exception as e:
             print(f"Timeframe formatted incorrectly: {e}")
