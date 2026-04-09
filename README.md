@@ -1,6 +1,6 @@
 # Ticker Tracker
 
-A Python pipeline that collects stock ticker mentions from Reddit, analyses sentiment, computes statistics (e.g. z-scores, velocity), and stores results in PostgreSQL. Optional components fetch historical prices (yfinance) and provide a CLI to visualise “hot” or emerging tickers.
+A Python pipeline that collects stock ticker mentions from Reddit, analyses sentiment, and stores results in PostgreSQL. Also available is a price fetcher using yfinance, and a CLI to visualise the data.
 
 Useful for tracking which tickers are trending across finance subreddits and spotting anomalous mention/sentiment activity.
 
@@ -9,14 +9,14 @@ Useful for tracking which tickers are trending across finance subreddits and spo
 - **Data collection**: Fetches recent posts and comments from configurable subreddits (e.g. r/pennystocks, r/Daytrading) and scans for ticker symbols.
 - **Sentiment**: Uses VADER to score sentiment per post; aggregates by ticker and subreddit.
 - **Price data**: Optional hourly collection of OHLCV for active tickers via yfinance.
-- **CLI tools**: Interactive menus to run collection, view popular/emerging/hot tickers, and graph mention trends.
+- **CLI tools**: Interactive menus to run collection, view popular tickers, and graph mention trends.
 
 ## Tech stack
 
 - **Python 3.8+**
 - **Reddit**: PRAW
 - **Database**: PostgreSQL (psycopg2)
-- **Data / analysis**: pandas, numpy, VADER (vaderSentiment)
+- **Data / analysis**: pandas, numpy, VADER
 - **Prices**: yfinance
 - **Viz**: matplotlib
 - **Scheduling**: schedule
@@ -34,7 +34,7 @@ Useful for tracking which tickers are trending across finance subreddits and spo
 
 2. **Environment variables**
 
-   Create a `.env` file in the project root (see `.env.example` if present, or use):
+   Create a `.env` file in the project root (see `.env.example`):
 
    ```env
    REDDIT_CLIENT_ID=your_reddit_client_id
@@ -43,7 +43,6 @@ Useful for tracking which tickers are trending across finance subreddits and spo
    DATABASE_URL=postgresql://user:password@host:port/dbname
    ```
 
-   Get Reddit credentials from [Reddit API apps](https://www.reddit.com/prefs/apps).
 
 3. **Database**
 
@@ -53,9 +52,9 @@ Useful for tracking which tickers are trending across finance subreddits and spo
    PYTHONPATH=src python -m storage.setup_db
    ```
 
-4. **Valid tickers (optional)**
+4. **Valid tickers**
 
-   The pipeline can filter to a allowlist of tickers. Place a `valid_tickers.json` in the project root: a JSON array of ticker symbols, e.g. `["AAPL", "TSLA", "GME"]`. If the file is missing, all detected tickers are used (a warning is printed).
+   A valid_tickers.json file is included in src/. It was last updated December 2025.
 
 ## Usage
 
@@ -67,7 +66,7 @@ Run from the **project root** so `.env` and `valid_tickers.json` are found.
   ticker-tracker
   ```
 
-- **Price collector** (hourly OHLCV for active tickers):
+- **Price collector** (hourly OHLCV for active tickers, also has backfilling options):
 
   ```bash
   ticker-prices

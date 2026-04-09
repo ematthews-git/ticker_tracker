@@ -13,7 +13,6 @@ def main():
         print("1: Enter ticker to graph it")
         print("2: List most popular tickers")
         print("3: Find new tickers")
-        print("4: Show highest z-scores")
         print("9: Exit")
 
         entry = input("Enter number: ")
