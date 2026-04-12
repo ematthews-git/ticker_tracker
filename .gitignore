@@ -19,3 +19,5 @@ logs/
 *.egg-info/
 
 bin/
+
+ticker_failures.json
