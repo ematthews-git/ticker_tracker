@@ -90,12 +90,11 @@ class TestRedditClient(unittest.TestCase):
     @patch('storage.database_manager.get_authors_batch')
     @patch('reddit.reddit_client.RedditClient._batch_upsert_authors')
     def test_fetch_recent_posts(self, mock_batch_upsert, mock_get_authors_batch):
-        """Test fetch_recent_posts yielding posts"""
-        # Setup mocks
+        """Test fetch_recent_posts returns (posts, stream_comments, per_post_comments)"""
         mock_subreddit = Mock()
         self.mock_reddit_instance.subreddit.return_value = mock_subreddit
-        
-        # Create mock posts
+
+        # Mock post with num_comments=0 so per-post comment fetching is skipped
         mock_post = Mock()
         mock_post.id = "post1"
         mock_post.title = "Test Post"
@@ -104,13 +103,13 @@ class TestRedditClient(unittest.TestCase):
         mock_post.created_utc = 1609459200.0
         mock_post.score = 100
         mock_post.upvote_ratio = 0.9
-        mock_post.num_comments = 10
+        mock_post.num_comments = 0
         mock_post.author.name = "user1"
         mock_post.author.created_utc = 1609459200.0
         mock_post.author.comment_karma = 100
         mock_post.author.link_karma = 200
-        
-        # Create mock comments
+
+        # Mock stream comment
         mock_comment = Mock()
         mock_comment.id = "comment1"
         mock_comment.body = "Test Comment"
@@ -121,36 +120,84 @@ class TestRedditClient(unittest.TestCase):
         mock_comment.author.created_utc = 1609459200.0
         mock_comment.author.comment_karma = 50
         mock_comment.author.link_karma = 10
-        
+
         mock_subreddit.new.return_value = [mock_post]
         mock_subreddit.comments.return_value = [mock_comment]
-        
-        # Mock database batch get to return empty (all cache miss)
         mock_get_authors_batch.return_value = {}
-        
-        # Execute
-        results = list(self.client.fetch_recent_posts("test_sub", limit=1))
-        
-        # Verify
-        self.assertEqual(len(results), 2) # 1 post + 1 comment
-        
-        # Check Post
-        self.assertEqual(results[0].id, "post1")
-        self.assertEqual(results[0].type, "post")
-        self.assertEqual(results[0].user_id, "user1")
-        
-        # Check Comment
-        self.assertEqual(results[1].id, "comment1")
-        self.assertEqual(results[1].type, "comment")
-        self.assertEqual(results[1].user_id, "user2")
+
+        posts, stream_comments, per_post_comments = self.client.fetch_recent_posts(
+            "test_sub", limit=1
+        )
+
+        # 1 post, 1 stream comment, 0 per-post comments (num_comments=0)
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(len(stream_comments), 1)
+        self.assertEqual(len(per_post_comments), 0)
+
+        self.assertEqual(posts[0].id, "post1")
+        self.assertEqual(posts[0].type, "post")
+        self.assertEqual(posts[0].user_id, "user1")
+
+        self.assertEqual(stream_comments[0].id, "comment1")
+        self.assertEqual(stream_comments[0].type, "comment")
+        self.assertEqual(stream_comments[0].user_id, "user2")
+
+    @patch('storage.database_manager.get_authors_batch')
+    @patch('reddit.reddit_client.RedditClient._batch_upsert_authors')
+    def test_fetch_recent_posts_per_post_comments(self, mock_batch_upsert, mock_get_authors_batch):
+        """Test that per-post comments are fetched for posts with num_comments > 0"""
+        mock_subreddit = Mock()
+        self.mock_reddit_instance.subreddit.return_value = mock_subreddit
+
+        mock_post = Mock()
+        mock_post.id = "post1"
+        mock_post.title = "Active Post"
+        mock_post.selftext = ""
+        mock_post.link_flair_text = None
+        mock_post.created_utc = 1609459200.0
+        mock_post.score = 50
+        mock_post.upvote_ratio = 0.8
+        mock_post.num_comments = 5
+        mock_post.author.name = "user1"
+        mock_post.author.created_utc = 1609459200.0
+        mock_post.author.comment_karma = 100
+        mock_post.author.link_karma = 50
+
+        mock_per_post_comment = Mock()
+        mock_per_post_comment.id = "ppc1"
+        mock_per_post_comment.body = "Per-post comment"
+        mock_per_post_comment.created_utc = 1609459300.0
+        mock_per_post_comment.submission.id = "post1"
+        mock_per_post_comment.score = 5
+        mock_per_post_comment.author.name = "user2"
+        mock_per_post_comment.author.created_utc = 1609459200.0
+        mock_per_post_comment.author.comment_karma = 20
+        mock_per_post_comment.author.link_karma = 5
+
+        mock_post.comments.list.return_value = [mock_per_post_comment]
+        mock_subreddit.new.return_value = [mock_post]
+        mock_subreddit.comments.return_value = []
+        mock_get_authors_batch.return_value = {}
+
+        posts, stream_comments, per_post_comments = self.client.fetch_recent_posts(
+            "test_sub", limit=1, top_posts_for_comments=1
+        )
+
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(len(stream_comments), 0)
+        self.assertEqual(len(per_post_comments), 1)
+        self.assertEqual(per_post_comments[0].id, "ppc1")
+        mock_post.comments.replace_more.assert_called_once_with(limit=0)
 
     def test_fetch_recent_posts_api_error(self):
-        """Test graceful handling of API errors"""
+        """Test graceful handling of API errors — returns empty tuple"""
         self.mock_reddit_instance.subreddit.side_effect = Exception("API Error")
-        
-        results = list(self.client.fetch_recent_posts("test_sub"))
-        
-        self.assertEqual(len(results), 0)
+
+        posts, stream_comments, per_post_comments = self.client.fetch_recent_posts("test_sub")
+
+        self.assertEqual(posts, [])
+        self.assertEqual(stream_comments, [])
+        self.assertEqual(per_post_comments, [])
 
 if __name__ == "__main__":
     unittest.main()

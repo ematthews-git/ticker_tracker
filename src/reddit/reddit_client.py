@@ -333,45 +333,109 @@ class RedditClient:
             author_quality=None,
         )
 
-    def fetch_recent_posts(self, subreddit: str, limit: int = 200):
-        """Yields recent posts and comments from subreddit
+    def fetch_recent_posts(
+        self,
+        subreddit: str,
+        limit: int = 200,
+        top_posts_for_comments: int = 20,
+    ) -> tuple[list, list, list]:
+        """Fetches recent posts and comments from a subreddit.
+
+        Comments are collected from two sources:
+        - Stream: the 200 most recent subreddit-wide comments (breadth — catches new
+          comments on any post, including older ones still receiving replies).
+        - Per-post: full comment trees for the top `top_posts_for_comments` most-discussed
+          new posts (depth — captures discussion missed by the stream due to volume).
 
         Args:
             subreddit (str): Name of subreddit (without r/).
-            limit (int, optional): Max number of posts to be retrieved. does not affect comments. Defaults to 200.
+            limit (int): Max number of posts to retrieve. Defaults to 200.
+            top_posts_for_comments (int): Number of top posts (by comment count) to fetch
+                full comment trees for. Defaults to 20.
 
-        Yields:
-            Post: a post dataclass instance representing an entry from the subreddit.
+        Returns:
+            tuple[list[Post], list[Post], list[Post]]: (posts, stream_comments, per_post_comments)
         """
         try:
             logger.debug(f"Fetching {limit} recent posts from r/{subreddit}")
 
             sub = self.reddit.subreddit(subreddit)
 
-            # Fetch all raw posts and comments first
+            # Fetch raw posts and subreddit-wide comment stream
             raw_posts = list(sub.new(limit=limit))
-            raw_comments = list(sub.comments(limit=200))
+            raw_stream_comments = list(sub.comments(limit=200))
 
-            cached_authors = self._resolve_authors(raw_posts, raw_comments)
+            # Fetch full comment trees for the top N most-discussed new posts
+            posts_to_fetch = sorted(
+                [p for p in raw_posts if p.num_comments > 0],
+                key=lambda p: p.num_comments,
+                reverse=True,
+            )[:top_posts_for_comments]
 
-            # Yield Posts
-            post_count = 0
-            for p in raw_posts:
-                post_obj = self._convert_to_post(p, subreddit, cached_authors)
-                yield post_obj
-                post_count += 1
-            # Yield Comments
-            comment_count = 0
-            for c in raw_comments:
-                post_obj = self._convert_to_comment(c, subreddit, cached_authors)
-                yield post_obj
-                comment_count += 1
+            raw_per_post_comments = []
+            for post in posts_to_fetch:
+                post.comments.replace_more(limit=0)
+                raw_per_post_comments.extend(post.comments.list())
+
+            all_raw_comments = raw_stream_comments + raw_per_post_comments
+            cached_authors = self._resolve_authors(raw_posts, all_raw_comments)
+
+            posts = [self._convert_to_post(p, subreddit, cached_authors) for p in raw_posts]
+            stream_comments = [
+                self._convert_to_comment(c, subreddit, cached_authors)
+                for c in raw_stream_comments
+            ]
+            per_post_comments = [
+                self._convert_to_comment(c, subreddit, cached_authors)
+                for c in raw_per_post_comments
+            ]
 
             logger.debug(
-                f"Fetched {post_count} posts and {comment_count} comments from r/{subreddit}"
+                f"Fetched {len(posts)} posts, {len(stream_comments)} stream comments, "
+                f"{len(per_post_comments)} per-post comments from r/{subreddit}"
             )
+            return posts, stream_comments, per_post_comments
 
         except Exception as e:
             logger.error(
                 f"Error connecting with subreddit '{subreddit}': {e}", exc_info=True
             )
+            return [], [], []
+
+    def fetch_comments_for_posts(
+        self, post_ids_and_subreddits: list[tuple[str, str]]
+    ) -> list:
+        """Fetches current comments for a list of known posts by ID.
+
+        Used by the :30 job to revisit recently-active posts and collect comments
+        that have appeared since the last :00 run.
+
+        Args:
+            post_ids_and_subreddits (list[tuple[str, str]]): List of (post_id, subreddit).
+
+        Returns:
+            list[Post]: Comment Post objects ready for process_mentions().
+        """
+        if not post_ids_and_subreddits:
+            return []
+
+        raw_comments_with_sub: list[tuple] = []
+        raw_submissions = []
+
+        for post_id, subreddit in post_ids_and_subreddits:
+            try:
+                submission = self.reddit.submission(id=post_id)
+                raw_submissions.append(submission)
+                submission.comments.replace_more(limit=0)
+                for comment in submission.comments.list():
+                    raw_comments_with_sub.append((comment, subreddit))
+            except Exception as e:
+                logger.warning(f"Failed to fetch comments for post {post_id}: {e}")
+
+        raw_comments = [c for c, _ in raw_comments_with_sub]
+        cached_authors = self._resolve_authors(raw_submissions, raw_comments)
+
+        return [
+            self._convert_to_comment(comment, subreddit, cached_authors)
+            for comment, subreddit in raw_comments_with_sub
+        ]

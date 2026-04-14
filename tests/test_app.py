@@ -32,26 +32,32 @@ class TestCollectData(unittest.TestCase):
                                      return_value=self.mock_scanner)
         self.patcher_reddit = patch('app.RedditClient')
         self.patcher_insert = patch('app.insert_mention_counts')
+        self.patcher_existing = patch('app.get_existing_post_ids_batch', return_value=set())
+        self.patcher_stats = patch('app.append_stat')
 
         self.mock_scanner_class = self.patcher_scanner.start()
         self.mock_reddit_class = self.patcher_reddit.start()
         self.mock_insert = self.patcher_insert.start()
+        self.patcher_existing.start()
+        self.patcher_stats.start()
 
-        # fetch_recent_posts is a generator — return an iterator of posts
-        self.mock_reddit_class.return_value.fetch_recent_posts.return_value = iter(
-            [self.mock_post_a, self.mock_post_b]
+        # fetch_recent_posts returns (posts, stream_comments, per_post_comments)
+        self.mock_reddit_class.return_value.fetch_recent_posts.return_value = (
+            [self.mock_post_a, self.mock_post_b], [], []
         )
 
     def tearDown(self):
         self.patcher_scanner.stop()
         self.patcher_reddit.stop()
         self.patcher_insert.stop()
+        self.patcher_existing.stop()
+        self.patcher_stats.stop()
 
     def test_fetches_from_all_configured_subreddits(self):
         """One RedditClient is created per subreddit, each fetching posts."""
         # Make fetch_recent_posts return a fresh iterator on each call
         self.mock_reddit_class.return_value.fetch_recent_posts.side_effect = (
-            lambda sub, limit: iter([self.mock_post_a])
+            lambda sub, limit: ([self.mock_post_a], [], [])
         )
 
         app.collect_data()
@@ -72,7 +78,7 @@ class TestCollectData(unittest.TestCase):
         posts_per_sub = [MagicMock(), MagicMock()]
 
         self.mock_reddit_class.return_value.fetch_recent_posts.side_effect = (
-            lambda sub, limit: iter(list(posts_per_sub))
+            lambda sub, limit: (list(posts_per_sub), [], [])
         )
 
         app.collect_data()
@@ -117,7 +123,7 @@ class TestCollectData(unittest.TestCase):
             call_count['n'] += 1
             if call_count['n'] == 1:
                 raise Exception("Network error for first subreddit")
-            return iter([self.mock_post_a])
+            return ([self.mock_post_a], [], [])
 
         self.mock_reddit_class.return_value.fetch_recent_posts.side_effect = fetch_side_effect
 
@@ -142,7 +148,7 @@ class TestCollectData(unittest.TestCase):
         from config import CLIENT_ID, CLIENT_SECRET, USER_AGENT
 
         self.mock_reddit_class.return_value.fetch_recent_posts.side_effect = (
-            lambda sub, limit: iter([self.mock_post_a])
+            lambda sub, limit: ([self.mock_post_a], [], [])
         )
 
         app.collect_data()
