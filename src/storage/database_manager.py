@@ -38,7 +38,12 @@ def insert_mention_counts(connection_pool, mention_data_points: list[MentionData
         execute_batch(cursor, """
             INSERT INTO mentions (ticker, subreddit, timestamp, mention_count, unique_users, total_score, total_comments, avg_sentiment)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (ticker, subreddit, timestamp) DO NOTHING
+            ON CONFLICT (ticker, subreddit, timestamp) DO UPDATE SET
+                mention_count  = mentions.mention_count  + EXCLUDED.mention_count,
+                unique_users   = mentions.unique_users   + EXCLUDED.unique_users,
+                total_score    = mentions.total_score    + EXCLUDED.total_score,
+                total_comments = mentions.total_comments + EXCLUDED.total_comments,
+                avg_sentiment  = (mentions.avg_sentiment + EXCLUDED.avg_sentiment) / 2
             """, data)
         
         conn.commit()
