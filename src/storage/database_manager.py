@@ -410,6 +410,46 @@ def get_authors_batch(connection_pool, usernames: list[str]) -> dict[str, Author
         cursor.close()
         connection_pool.putconn(conn)
 
+def fetch_recent_post_ids(
+    connection_pool, lookback_hours: int, limit: int
+) -> list[tuple[str, str]]:
+    """Returns (post_id, subreddit) for the most-discussed posts from the last N hours.
+
+    Used by collect_older_comments() to identify posts worth re-checking for new comments.
+
+    Args:
+        connection_pool: The PostgreSQL connection pool.
+        lookback_hours (int): How many hours back to search.
+        limit (int): Maximum number of posts to return.
+
+    Returns:
+        list[tuple[str, str]]: List of (post_id, subreddit) ordered by num_comments desc.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    conn = connection_pool.getconn()
+    cursor = conn.cursor()
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+        cursor.execute(
+            """
+            SELECT post_id, subreddit FROM posts
+            WHERE type = 'post'
+              AND created_utc >= %s
+            ORDER BY num_comments DESC
+            LIMIT %s
+            """,
+            (cutoff, limit),
+        )
+        return cursor.fetchall()
+    except Exception as e:
+        logger.error(f"Error fetching recent post IDs: {e}")
+        return []
+    finally:
+        cursor.close()
+        connection_pool.putconn(conn)
+
+
 def get_existing_post_ids_batch(connection_pool, post_ids: list[str]) -> set[str]:
     """Check which post IDs from the list already exist in the database.
     
