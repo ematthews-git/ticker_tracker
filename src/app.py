@@ -86,10 +86,24 @@ def collect_data() -> None:
                 except Exception as e:
                     logger.error(f"Exception processing r/{sub}: {e}")
 
+        # Deduplicate by post ID as a comment can appear in both the subreddit stream
+        # and the per-post comment fetch if it's recent and on a top-discussed post.
+        seen_ids: set[str] = set()
+        unique_posts = []
+        for p in all_posts:
+            if p.id not in seen_ids:
+                seen_ids.add(p.id)
+                unique_posts.append(p)
+        duplicates_removed = len(all_posts) - len(unique_posts)
+        if duplicates_removed:
+            logger.info(
+                f"Removed {duplicates_removed} duplicate posts/comments before processing"
+            )
+
         logger.info(
-            f"Processing {len(all_posts)} total posts/comments for ticker mentions..."
+            f"Processing {len(unique_posts)} total posts/comments for ticker mentions..."
         )
-        mention_data_points = scanner.process_mentions(all_posts)
+        mention_data_points = scanner.process_mentions(unique_posts)
         logger.info(
             f"Completed. Found {len(mention_data_points)} unique ticker-subreddit combinations"
         )
