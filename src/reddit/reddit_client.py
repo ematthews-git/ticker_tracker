@@ -261,25 +261,22 @@ class RedditClient:
 
         return cached_authors
 
-    def _convert_to_post(self, raw_post, subreddit: str, cached_authors: dict) -> Post:
+    def _convert_to_post(self, raw_post, subreddit: str) -> Post:
         """Converts a raw Reddit post object to a Post dataclass instance.
+
+        The author username is read directly from the PRAW Submission object —
+        it is included in the Reddit listing response and requires no extra API call.
+        Posts from deleted/suspended accounts have author=None and are recorded as
+        "[DELETED]".
 
         Args:
             raw_post: PRAW Submission object
             subreddit (str): Name of the subreddit
-            cached_authors (dict): Dictionary mapping author names to Author objects
 
         Returns:
             Post: A Post dataclass instance representing the Reddit post
         """
-        author_name = raw_post.author.name if raw_post.author else None
-
-        # Use cached author object or mark as deleted
-        if author_name and author_name in cached_authors:
-            author_obj = cached_authors[author_name]
-            user_id = author_obj.username
-        else:
-            user_id = "[DELETED]"
+        user_id = raw_post.author.name if raw_post.author else "[DELETED]"
 
         return Post(
             id=raw_post.id,
@@ -296,27 +293,22 @@ class RedditClient:
             author_quality=None,
         )
 
-    def _convert_to_comment(
-        self, raw_comment, subreddit: str, cached_authors: dict
-    ) -> Post:
+    def _convert_to_comment(self, raw_comment, subreddit: str) -> Post:
         """Converts a raw Reddit comment object to a Post dataclass instance.
+
+        The author username is read directly from the PRAW Comment object —
+        it is included in the Reddit listing response and requires no extra API call.
+        Comments from deleted/suspended accounts have author=None and are recorded
+        as "[DELETED]".
 
         Args:
             raw_comment: PRAW Comment object
             subreddit (str): Name of the subreddit
-            cached_authors (dict): Dictionary mapping author names to Author objects
 
         Returns:
             Post: A Post dataclass instance representing the Reddit comment
         """
-        author_name = raw_comment.author.name if raw_comment.author else None
-
-        # Use cached author object or mark as deleted
-        if author_name and author_name in cached_authors:
-            author_obj = cached_authors[author_name]
-            user_id = author_obj.username
-        else:
-            user_id = "[DELETED]"
+        user_id = raw_comment.author.name if raw_comment.author else "[DELETED]"
 
         return Post(
             id=raw_comment.id,
@@ -377,17 +369,12 @@ class RedditClient:
                 post.comments.replace_more(limit=0)
                 raw_per_post_comments.extend(post.comments.list())
 
-            all_raw_comments = raw_stream_comments + raw_per_post_comments
-            cached_authors = self._resolve_authors(raw_posts, all_raw_comments)
-
-            posts = [self._convert_to_post(p, subreddit, cached_authors) for p in raw_posts]
+            posts = [self._convert_to_post(p, subreddit) for p in raw_posts]
             stream_comments = [
-                self._convert_to_comment(c, subreddit, cached_authors)
-                for c in raw_stream_comments
+                self._convert_to_comment(c, subreddit) for c in raw_stream_comments
             ]
             per_post_comments = [
-                self._convert_to_comment(c, subreddit, cached_authors)
-                for c in raw_per_post_comments
+                self._convert_to_comment(c, subreddit) for c in raw_per_post_comments
             ]
 
             logger.debug(
@@ -420,22 +407,17 @@ class RedditClient:
             return []
 
         raw_comments_with_sub: list[tuple] = []
-        raw_submissions = []
 
         for post_id, subreddit in post_ids_and_subreddits:
             try:
                 submission = self.reddit.submission(id=post_id)
-                raw_submissions.append(submission)
                 submission.comments.replace_more(limit=0)
                 for comment in submission.comments.list():
                     raw_comments_with_sub.append((comment, subreddit))
             except Exception as e:
                 logger.warning(f"Failed to fetch comments for post {post_id}: {e}")
 
-        raw_comments = [c for c, _ in raw_comments_with_sub]
-        cached_authors = self._resolve_authors(raw_submissions, raw_comments)
-
         return [
-            self._convert_to_comment(comment, subreddit, cached_authors)
+            self._convert_to_comment(comment, subreddit)
             for comment, subreddit in raw_comments_with_sub
         ]
