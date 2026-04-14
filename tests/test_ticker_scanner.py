@@ -259,5 +259,38 @@ class TestTickerMentionScanner(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].ticker, 'TSLA')
 
+    # Test 10: Buckets mentions by post creation hour, not scanner run time
+    def test_buckets_mentions_by_post_creation_hour(self):
+        """Test that posts created in different hours produce separate MentionDataPoints
+        with timestamps matching each post's creation hour, not the current time."""
+        hour_12 = datetime(2025, 1, 1, 12, 30, 0, tzinfo=timezone.utc)
+        hour_13 = datetime(2025, 1, 1, 13, 45, 0, tzinfo=timezone.utc)
+
+        posts = [
+            Post(id='t10a', subreddit='pennystocks', type='post', text='AAPL to the moon',
+                 link_flair_text=None, created_utc=hour_12.timestamp(), origin_id=None,
+                 user_id=self.default_user_id, score=self.default_score, upvote_ratio=1.0,
+                 num_comments=self.default_num_comments, author_quality=self.default_author_quality),
+            Post(id='t10b', subreddit='pennystocks', type='post', text='Buying more AAPL',
+                 link_flair_text=None, created_utc=hour_13.timestamp(), origin_id=None,
+                 user_id=self.default_user_id, score=self.default_score, upvote_ratio=1.0,
+                 num_comments=self.default_num_comments, author_quality=self.default_author_quality),
+        ]
+
+        with patch.object(self.scanner, '_batch_save_posts'):
+            result = self.scanner.process_mentions(posts)
+
+        self.assertEqual(len(result), 2)
+
+        timestamps = {dp.timestamp for dp in result}
+        expected_12 = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        expected_13 = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
+        self.assertIn(expected_12, timestamps)
+        self.assertIn(expected_13, timestamps)
+
+        for dp in result:
+            self.assertEqual(dp.mention_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

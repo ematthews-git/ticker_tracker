@@ -184,10 +184,6 @@ class TickerMentionScanner:
         Returns:
             list[MentionDataPoint]: A list of MentionDataPoint objects representing ticker mentions.
         """
-        timestamp = datetime.now(timezone.utc).replace(
-            minute=0, second=0, microsecond=0
-        )
-
         # Only process new posts - if a post already exists, it was already counted
         posts_to_process = self._find_new_posts(post_list)
         new_posts = self._posts_to_tuples(posts_to_process)
@@ -202,11 +198,15 @@ class TickerMentionScanner:
             )
 
         # Process ticker mentions for new posts only
-        # Track detailed metrics per ticker-subreddit combination
-        mention_data = {}  # key: (ticker, subreddit) -> {count, users, total_score, total_comments}
+        # Track detailed metrics per ticker-subreddit-hour combination
+        mention_data = {}  # key: (ticker, subreddit, hour_bucket) -> {count, users, total_score, total_comments}
 
         posts_with_mentions = 0
         for post in posts_to_process:
+            # Bucket by the post's actual creation hour, not the scanner's run time
+            hour_bucket = datetime.fromtimestamp(post.created_utc, tz=timezone.utc).replace(
+                minute=0, second=0, microsecond=0
+            )
             # find ticker mentions
             tickers = re.findall(
                 r"\b[A-Z]{2,5}\b", post.text
@@ -215,7 +215,7 @@ class TickerMentionScanner:
             for t in tickers:
                 if t in self.valid:
                     post_has_mention = True
-                    key = (t.upper(), post.subreddit)
+                    key = (t.upper(), post.subreddit, hour_bucket)
                     if key not in mention_data:
                         mention_data[key] = {
                             "count": 0,
@@ -239,7 +239,7 @@ class TickerMentionScanner:
 
         # Convert mention_data dictionary to list of MentionDataPoint objects
         mention_data_points = []
-        for (ticker, subreddit), data in mention_data.items():
+        for (ticker, subreddit, hour_bucket), data in mention_data.items():
             sentiment = self.mention_analyser.analyse_ticker_sentiment(
                 data["posts"], ticker
             )
@@ -249,7 +249,7 @@ class TickerMentionScanner:
                 MentionDataPoint(
                     ticker=ticker,
                     subreddit=subreddit,
-                    timestamp=timestamp,
+                    timestamp=hour_bucket,
                     mention_count=data["count"],
                     unique_users=len(data["users"]),
                     total_score=data["total_score"],
