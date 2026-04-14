@@ -75,17 +75,22 @@ class TestCollectData(unittest.TestCase):
     def test_all_posts_aggregated_and_passed_to_scanner(self):
         """Posts from all subreddits are combined into one list for the scanner."""
         num_subreddits = len(SUBREDDITS)
-        posts_per_sub = [MagicMock(), MagicMock()]
 
-        self.mock_reddit_class.return_value.fetch_recent_posts.side_effect = (
-            lambda sub, limit: (list(posts_per_sub), [], [])
-        )
+        # Each call returns fresh MagicMock posts with unique IDs so deduplication
+        # doesn't collapse them into fewer entries than expected.
+        def make_unique_posts(sub, limit):
+            posts = [MagicMock(), MagicMock()]
+            for i, p in enumerate(posts):
+                p.id = f"{sub}_post_{i}"
+            return (posts, [], [])
+
+        self.mock_reddit_class.return_value.fetch_recent_posts.side_effect = make_unique_posts
 
         app.collect_data()
 
         self.mock_scanner.process_mentions.assert_called_once()
         all_posts_arg = self.mock_scanner.process_mentions.call_args[0][0]
-        self.assertEqual(len(all_posts_arg), num_subreddits * len(posts_per_sub))
+        self.assertEqual(len(all_posts_arg), num_subreddits * 2)  # 2 unique posts per subreddit
 
     def test_insert_called_when_mentions_found(self):
         """insert_mention_counts is called with the pool and mention data when found."""
