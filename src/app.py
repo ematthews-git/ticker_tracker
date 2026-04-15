@@ -66,14 +66,20 @@ def collect_data() -> None:
                         future.result()
                     )
 
-                    # Track per-source new-comment counts for stats
+                    # Track per-source new-comment counts for stats.
+                    # Check each group against both the DB and the other group so that
+                    # a comment appearing in both stream and per-post is only counted once.
                     all_ids = [p.id for p in stream_comments + per_post_comments]
                     existing = (
                         get_existing_post_ids_batch(pool, all_ids) if all_ids else set()
                     )
-                    new_stream = sum(1 for c in stream_comments if c.id not in existing)
+                    stream_ids = {c.id for c in stream_comments}
+                    new_stream = sum(
+                        1 for c in stream_comments if c.id not in existing
+                    )
                     new_per_post = sum(
-                        1 for c in per_post_comments if c.id not in existing
+                        1 for c in per_post_comments
+                        if c.id not in existing and c.id not in stream_ids
                     )
 
                     subreddit_stats[subreddit] = {
