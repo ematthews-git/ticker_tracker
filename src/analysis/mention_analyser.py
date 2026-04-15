@@ -7,6 +7,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+_MIN_POST_LENGTH = 15
+_DOWNVOTE_DAMPEN_FACTOR = 0.25
+
+
 class MentionAnalyser:
     """Handles analysis relating to mentions and the MentionDataPoint dataclass"""
 
@@ -24,6 +28,16 @@ class MentionAnalyser:
         """
         return self.sentiment_analyser.analyse_text(post.text)
 
+    def _effective_sentiment(self, post: Post) -> float:
+        """Return the post's sentiment adjusted for community rejection.
+
+        Posts with negative upvote scores contribute at a quarter weight.
+        """
+        sentiment = self.analyse_post_sentiment(post)
+        if post.score < 0:
+            sentiment *= _DOWNVOTE_DAMPEN_FACTOR
+        return sentiment
+
     def analyse_ticker_sentiment(
         self, posts: list[Post], ticker: str
     ) -> dict[str, float]:
@@ -40,9 +54,13 @@ class MentionAnalyser:
 
         for post in posts:
             # check that ticker is mentioned
-            if ticker.upper() in post.text.upper():
-                sentiment = self.analyse_post_sentiment(post)
-                sentiments.append(sentiment)
+            if ticker.upper() not in post.text.upper():
+                continue
+            # Skip ticker-only / near-empty posts — they produce 0.0 scores
+            # that drag the mean toward neutral without carrying signal.
+            if len(post.text.strip()) < _MIN_POST_LENGTH:
+                continue
+            sentiments.append(self._effective_sentiment(post))
 
         if not sentiments:
             return {"avg_sentiment": 0.0, "positive_ratio": 0.0, "negative_ratio": 0.0}
@@ -56,34 +74,6 @@ class MentionAnalyser:
             "positive_ratio": round(positive_ratio, 4),
             "negative_ratio": round(negative_ratio, 4),
         }
-
-    def calculate_weighted_sentiment(self, posts: list[Post], ticker: str) -> float:
-        """Compute the weighted sentiment for a ticker based on engagement.
-
-        Args:
-            posts (list[Post]): Posts to analyse.
-            ticker (str): Ticker to analyse.
-
-        Returns:
-            float: Weighted average sentiment.
-        """
-        weighted_sum = 0.0
-        total_weight = 0.0
-
-        for post in posts:
-            if ticker.upper() in post.text.upper():
-                sentiment = self.analyse_post_sentiment(post)
-
-                # Weight based on engagement
-                weight = max(1, post.score) + (post.num_comments * 0.5)
-
-                weighted_sum += sentiment * weight
-                total_weight += weight
-
-        if total_weight == 0:
-            return 0.0
-
-        return round(weighted_sum / total_weight, 4)
 
     def get_sentiment_cat_distribution(
         self, posts: list[Post], ticker: str

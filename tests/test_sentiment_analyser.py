@@ -67,6 +67,55 @@ def test_analyse_batch(analyser):
     assert scores[0] > 0
     assert scores[1] < 0
 
+def test_multi_word_phrase_scored_atomically(analyser):
+    """Multi-word bearish phrases score negative even when the constituent words are neutral."""
+    # "paper hands" is bearish; "paper" and "hands" alone are not.
+    paper_hands_score = analyser.analyse_text("Bunch of paper hands in here.")
+    neutral_score = analyser.analyse_text("Bunch of paper in here.")
+    assert paper_hands_score < -0.2
+    assert paper_hands_score < neutral_score
+
+    # "short squeeze" flips the otherwise-neutral 'short' into a positive signal.
+    assert analyser.analyse_text("Classic short squeeze setup.") > 0.2
+
+
+def test_emoji_sentiment(analyser):
+    """Registered emojis contribute to sentiment even without any pattern match."""
+    assert analyser.analyse_text("AAPL 📈📈📈") > 0.2
+    assert analyser.analyse_text("AAPL 📉📉📉") < -0.2
+    assert analyser.analyse_text("Rainbow 🐻 says bye") < 0.0
+
+
+def test_modality_dampening(analyser):
+    """Conditional/hypothetical language dampens score magnitude."""
+    declarative = analyser.analyse_text("This stock is going to the moon.")
+    conditional = analyser.analyse_text("If this might moon maybe it could go up.")
+    assert declarative > 0.3
+    # conditional still positive but materially weaker
+    assert abs(conditional) < abs(declarative)
+
+
+def test_sarcasm_dampening(analyser):
+    """Sarcasm markers halve magnitude but do not flip sign."""
+    sincere = analyser.analyse_text("This is a great buy.")
+    sarcastic = analyser.analyse_text("This is a great buy /s")
+    assert sincere > 0.3
+    assert 0 < sarcastic < sincere  # dampened, not flipped
+
+    # Clown + bullish language
+    clown = analyser.analyse_text("Going to the moon 🤡")
+    straight = analyser.analyse_text("Going to the moon")
+    assert 0 < clown < straight
+
+
+def test_question_dampening(analyser):
+    """Posts dominated by questions score weaker than declarative equivalents."""
+    declarative = analyser.analyse_text("This is a great buy. Going to the moon.")
+    question = analyser.analyse_text("Is this a great buy? Going to the moon?")
+    assert declarative > 0.3
+    assert 0 < question < declarative
+
+
 def test_categorise_sentiment(analyser):
     """Test sentiment categorization."""
     assert analyser.categorise_sentiment(0.6) == SentimentCategory.VERY_POSITIVE
