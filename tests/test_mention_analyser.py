@@ -134,6 +134,55 @@ def test_calculate_weighted_sentiment(mention_analyser, mock_sentiment_analyser,
     
     assert weighted_score == round(10.0 / 18.5, 4)
 
+def test_downvoted_post_is_dampened(mention_analyser, mock_sentiment_analyser):
+    """Posts with negative score contribute at quarter weight."""
+    posts = [
+        Post(
+            id="a", subreddit="stocks", type="post",
+            text="AAPL is going to the moon!",
+            link_flair_text=None, created_utc=1.0, origin_id=None, user_id="u1",
+            score=10, upvote_ratio=0.9, num_comments=1, author_quality=None,
+        ),
+        Post(
+            id="b", subreddit="stocks", type="post",
+            text="AAPL is going to the moon!",
+            link_flair_text=None, created_utc=2.0, origin_id=None, user_id="u2",
+            score=-5, upvote_ratio=0.1, num_comments=1, author_quality=None,
+        ),
+    ]
+    mock_sentiment_analyser.analyse_text.return_value = 0.8
+
+    result = mention_analyser.analyse_ticker_sentiment(posts, "AAPL")
+
+    # Upvoted: 0.8, Downvoted: 0.8 * 0.25 = 0.2 → avg = 0.5
+    assert result['avg_sentiment'] == 0.5
+
+
+def test_short_posts_skipped(mention_analyser, mock_sentiment_analyser):
+    """Posts below the minimum length threshold should not contribute."""
+    posts = [
+        Post(
+            id="a", subreddit="stocks", type="post",
+            text="AAPL is going to the moon!",  # 26 chars, kept
+            link_flair_text=None, created_utc=1.0, origin_id=None, user_id="u1",
+            score=10, upvote_ratio=0.9, num_comments=1, author_quality=None,
+        ),
+        Post(
+            id="b", subreddit="stocks", type="post",
+            text="AAPL",  # too short, skipped
+            link_flair_text=None, created_utc=2.0, origin_id=None, user_id="u2",
+            score=10, upvote_ratio=0.9, num_comments=1, author_quality=None,
+        ),
+    ]
+    mock_sentiment_analyser.analyse_text.return_value = 0.8
+
+    result = mention_analyser.analyse_ticker_sentiment(posts, "AAPL")
+
+    # Only the long post contributes
+    assert result['avg_sentiment'] == 0.8
+    assert mock_sentiment_analyser.analyse_text.call_count == 1
+
+
 def test_get_sentiment_cat_distribution(mention_analyser, mock_sentiment_analyser, sample_posts):
     """Test sentiment category distribution."""
     # Mock categories
