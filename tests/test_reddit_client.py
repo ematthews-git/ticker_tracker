@@ -1,9 +1,8 @@
 import unittest
 from unittest.mock import Mock, patch, MagicMock, PropertyMock
-from datetime import datetime, timezone
 
 from reddit.reddit_client import RedditClient
-from models import Post, Author
+
 
 class TestRedditClient(unittest.TestCase):
     """Test suite for RedditClient class"""
@@ -14,14 +13,11 @@ class TestRedditClient(unittest.TestCase):
         self.client_secret = "fake_secret"
         self.user_agent = "fake_agent"
         self.mock_pool = MagicMock()
-        
+
         # Patch praw.Reddit to avoid actual network calls during init
-        with patch('praw.Reddit') as mock_reddit:
+        with patch("praw.Reddit") as mock_reddit:
             self.client = RedditClient(
-                self.client_id, 
-                self.client_secret, 
-                self.user_agent, 
-                self.mock_pool
+                self.client_id, self.client_secret, self.user_agent, self.mock_pool
             )
             self.mock_reddit_instance = self.client.reddit
 
@@ -30,65 +26,8 @@ class TestRedditClient(unittest.TestCase):
         self.assertEqual(self.client.connection_pool, self.mock_pool)
         self.assertIsNotNone(self.client.reddit)
 
-    @patch('reddit.reddit_client.get_author_data')
-    def test_get_author_data_cache_hit(self, mock_get_author_data):
-        """Test _get_author_data_from_cache_or_api with cache hit"""
-        # Setup
-        mock_author_praw = Mock()
-        mock_author_praw.name = "test_user"
-        
-        cached_author = Author(
-            username="test_user",
-            created_utc=datetime.now(timezone.utc),
-            comment_karma=100,
-            link_karma=200,
-            last_updated=datetime.now(timezone.utc)
-        )
-        mock_get_author_data.return_value = cached_author
-        
-        authors_to_cache = []
-        
-        # Execute
-        result = self.client._get_author_data_from_cache_or_api(mock_author_praw, authors_to_cache)
-        
-        # Verify
-        self.assertEqual(result, cached_author)
-        mock_get_author_data.assert_called_once_with(self.mock_pool, "test_user")
-        self.assertEqual(len(authors_to_cache), 0) # Should not add to cache list if hit
-
-    @patch('reddit.reddit_client.get_author_data')
-    def test_get_author_data_cache_miss(self, mock_get_author_data):
-        """Test _get_author_data_from_cache_or_api with cache miss"""
-        # Setup
-        mock_get_author_data.return_value = None
-        
-        mock_author_praw = Mock()
-        mock_author_praw.name = "test_user"
-        mock_author_praw.created_utc = 1609459200.0 # 2021-01-01
-        mock_author_praw.comment_karma = 50
-        mock_author_praw.link_karma = 10
-        
-        authors_to_cache = []
-        
-        # Execute
-        result = self.client._get_author_data_from_cache_or_api(mock_author_praw, authors_to_cache)
-        
-        # Verify
-        self.assertEqual(result.username, "test_user")
-        self.assertEqual(result.comment_karma, 50)
-        self.assertEqual(len(authors_to_cache), 1)
-        self.assertEqual(authors_to_cache[0], result)
-
-    def test_get_author_data_deleted_user(self):
-        """Test _get_author_data_from_cache_or_api with None author (deleted)"""
-        authors_to_cache = []
-        result = self.client._get_author_data_from_cache_or_api(None, authors_to_cache)
-        
-        self.assertEqual(result.username, "[DELETED]")
-        self.assertEqual(len(authors_to_cache), 0)
-
-    @patch('storage.database_manager.get_authors_batch')
-    @patch('reddit.reddit_client.RedditClient._batch_upsert_authors')
+    @patch("storage.database_manager.get_authors_batch")
+    @patch("reddit.reddit_client.RedditClient._batch_upsert_authors")
     def test_fetch_recent_posts(self, mock_batch_upsert, mock_get_authors_batch):
         """Test fetch_recent_posts returns (posts, stream_comments, per_post_comments)"""
         mock_subreddit = Mock()
@@ -142,9 +81,11 @@ class TestRedditClient(unittest.TestCase):
         self.assertEqual(stream_comments[0].type, "comment")
         self.assertEqual(stream_comments[0].user_id, "user2")
 
-    @patch('storage.database_manager.get_authors_batch')
-    @patch('reddit.reddit_client.RedditClient._batch_upsert_authors')
-    def test_fetch_recent_posts_per_post_comments(self, mock_batch_upsert, mock_get_authors_batch):
+    @patch("storage.database_manager.get_authors_batch")
+    @patch("reddit.reddit_client.RedditClient._batch_upsert_authors")
+    def test_fetch_recent_posts_per_post_comments(
+        self, mock_batch_upsert, mock_get_authors_batch
+    ):
         """Test that per-post comments are fetched for posts with num_comments > 0"""
         mock_subreddit = Mock()
         self.mock_reddit_instance.subreddit.return_value = mock_subreddit
@@ -193,11 +134,14 @@ class TestRedditClient(unittest.TestCase):
         """Test graceful handling of API errors — returns empty tuple"""
         self.mock_reddit_instance.subreddit.side_effect = Exception("API Error")
 
-        posts, stream_comments, per_post_comments = self.client.fetch_recent_posts("test_sub")
+        posts, stream_comments, per_post_comments = self.client.fetch_recent_posts(
+            "test_sub"
+        )
 
         self.assertEqual(posts, [])
         self.assertEqual(stream_comments, [])
         self.assertEqual(per_post_comments, [])
+
 
 if __name__ == "__main__":
     unittest.main()

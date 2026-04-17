@@ -203,15 +203,16 @@ class TickerMentionScanner:
 
         posts_with_mentions = 0
         for post in posts_to_process:
-            # Bucket by the post's actual creation hour, not the scanner's run time
-            hour_bucket = datetime.fromtimestamp(post.created_utc, tz=timezone.utc).replace(
-                minute=0, second=0, microsecond=0
-            )
+            # Bucket by the post's creation hour UTC
+            hour_bucket = datetime.fromtimestamp(
+                post.created_utc, tz=timezone.utc
+            ).replace(minute=0, second=0, microsecond=0)
             # find ticker mentions
             tickers = re.findall(
                 r"\b[A-Z]{2,5}\b", post.text
             )  # captal letters + 2 to 5 characters
             post_has_mention = False
+
             for t in tickers:
                 if t in self.valid:
                     post_has_mention = True
