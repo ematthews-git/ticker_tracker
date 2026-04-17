@@ -33,6 +33,7 @@ def collect_data() -> None:
     """Collects ticker mentions and saves to database"""
     logger = logging.getLogger(__name__)
     logger.info(f"[{datetime.now(timezone.utc)}] starting data collection...")
+
     try:
         scanner = TickerMentionScanner(VALID, pool)
         all_posts = []
@@ -56,9 +57,11 @@ def collect_data() -> None:
                 return subreddit, [], [], []
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            # holds each future process and subreddit
             future_to_sub = {
                 executor.submit(process_subreddit, sub): sub for sub in SUBREDDITS
             }
+
             for future in concurrent.futures.as_completed(future_to_sub):
                 sub = future_to_sub[future]
                 try:
@@ -66,28 +69,25 @@ def collect_data() -> None:
                         future.result()
                     )
 
-                    # Track per-source new-comment counts for stats.
-                    # Check each group against both the DB and the other group so that
-                    # a comment appearing in both stream and per-post is only counted once.
+                    # This to evalute the usefulness of features
                     all_ids = [p.id for p in stream_comments + per_post_comments]
                     existing = (
                         get_existing_post_ids_batch(pool, all_ids) if all_ids else set()
                     )
                     stream_ids = {c.id for c in stream_comments}
-                    new_stream = sum(
-                        1 for c in stream_comments if c.id not in existing
-                    )
+                    new_stream = sum(1 for c in stream_comments if c.id not in existing)
                     new_per_post = sum(
-                        1 for c in per_post_comments
+                        1
+                        for c in per_post_comments
                         if c.id not in existing and c.id not in stream_ids
                     )
-
                     subreddit_stats[subreddit] = {
                         "stream_comments_fetched": len(stream_comments),
                         "per_post_comments_fetched": len(per_post_comments),
                         "new_stream_comments": new_stream,
                         "new_per_post_comments": new_per_post,
                     }
+
                     all_posts.extend(posts + stream_comments + per_post_comments)
                 except Exception as e:
                     logger.error(f"Exception processing r/{sub}: {e}")
@@ -155,7 +155,7 @@ def collect_older_comments() -> None:
             f"Fetched {len(comments)} comments from {len(post_ids)} recent posts"
         )
 
-        # Count how many are genuinely new before processing
+        # Count how many are new before processing
         comment_ids = [c.id for c in comments]
         existing = (
             get_existing_post_ids_batch(pool, comment_ids) if comment_ids else set()
@@ -166,7 +166,7 @@ def collect_older_comments() -> None:
         if mention_data_points:
             insert_mention_counts(pool, mention_data_points)
             logger.info(
-                f"Saved {len(mention_data_points)} mention records from older comments"
+                f"Saved {len(mention_data_points)} mention records from older comments \n {'=' * 50}"
             )
 
         append_stat(
