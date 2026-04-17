@@ -26,9 +26,7 @@ class TestRedditClient(unittest.TestCase):
         self.assertEqual(self.client.connection_pool, self.mock_pool)
         self.assertIsNotNone(self.client.reddit)
 
-    @patch("storage.database_manager.get_authors_batch")
-    @patch("reddit.reddit_client.RedditClient._batch_upsert_authors")
-    def test_fetch_recent_posts(self, mock_batch_upsert, mock_get_authors_batch):
+    def test_fetch_recent_posts(self):
         """Test fetch_recent_posts returns (posts, stream_comments, per_post_comments)"""
         mock_subreddit = Mock()
         self.mock_reddit_instance.subreddit.return_value = mock_subreddit
@@ -62,7 +60,6 @@ class TestRedditClient(unittest.TestCase):
 
         mock_subreddit.new.return_value = [mock_post]
         mock_subreddit.comments.return_value = [mock_comment]
-        mock_get_authors_batch.return_value = {}
 
         posts, stream_comments, per_post_comments = self.client.fetch_recent_posts(
             "test_sub", limit=1
@@ -81,11 +78,7 @@ class TestRedditClient(unittest.TestCase):
         self.assertEqual(stream_comments[0].type, "comment")
         self.assertEqual(stream_comments[0].user_id, "user2")
 
-    @patch("storage.database_manager.get_authors_batch")
-    @patch("reddit.reddit_client.RedditClient._batch_upsert_authors")
-    def test_fetch_recent_posts_per_post_comments(
-        self, mock_batch_upsert, mock_get_authors_batch
-    ):
+    def test_fetch_recent_posts_per_post_comments(self):
         """Test that per-post comments are fetched for posts with num_comments > 0"""
         mock_subreddit = Mock()
         self.mock_reddit_instance.subreddit.return_value = mock_subreddit
@@ -118,7 +111,6 @@ class TestRedditClient(unittest.TestCase):
         mock_post.comments.list.return_value = [mock_per_post_comment]
         mock_subreddit.new.return_value = [mock_post]
         mock_subreddit.comments.return_value = []
-        mock_get_authors_batch.return_value = {}
 
         posts, stream_comments, per_post_comments = self.client.fetch_recent_posts(
             "test_sub", limit=1, top_posts_for_comments=1
