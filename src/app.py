@@ -204,7 +204,7 @@ def main():
 
     # schedule the jobs
     schedule.every().hour.at(":00").do(collect_data)
-    schedule.every().hour.at(":45").do(collect_older_comments)
+    schedule.every().hour.at(":30").do(collect_older_comments)
 
     try:
         while True:
