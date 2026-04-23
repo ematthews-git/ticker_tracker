@@ -211,25 +211,25 @@ class TickerMentionScanner:
             tickers = re.findall(
                 r"\b[A-Z]{2,5}\b", post.text
             )  # captal letters + 2 to 5 characters
-            post_has_mention = False
+            # Deduplicate: count each ticker at most once per post
+            unique_tickers = {t for t in tickers if t in self.valid}
+            post_has_mention = bool(unique_tickers)
 
-            for t in tickers:
-                if t in self.valid:
-                    post_has_mention = True
-                    key = (t.upper(), post.subreddit, hour_bucket)
-                    if key not in mention_data:
-                        mention_data[key] = {
-                            "count": 0,
-                            "users": set(),
-                            "total_score": 0,
-                            "total_comments": 0,
-                            "posts": [],
-                        }
-                    mention_data[key]["count"] += 1
-                    mention_data[key]["users"].add(post.user_id)
-                    mention_data[key]["total_score"] += post.score
-                    mention_data[key]["total_comments"] += post.num_comments
-                    mention_data[key]["posts"].append(post)
+            for t in unique_tickers:
+                key = (t.upper(), post.subreddit, hour_bucket)
+                if key not in mention_data:
+                    mention_data[key] = {
+                        "count": 0,
+                        "users": set(),
+                        "total_score": 0,
+                        "total_comments": 0,
+                        "posts": [],
+                    }
+                mention_data[key]["count"] += 1
+                mention_data[key]["users"].add(post.user_id)
+                mention_data[key]["total_score"] += post.score
+                mention_data[key]["total_comments"] += post.num_comments
+                mention_data[key]["posts"].append(post)
 
             if post_has_mention:
                 posts_with_mentions += 1
