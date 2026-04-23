@@ -109,9 +109,9 @@ class TestTickerMentionScanner(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].ticker, 'AAPL')
 
-    # Test 4: Counts multiple mentions of same ticker
-    def test_counts_multiple_mentions_same_ticker(self):
-        """Test that multiple mentions of the same ticker are counted"""
+    # Test 4: Counts only one mention per ticker per post
+    def test_counts_one_mention_per_ticker_per_post(self):
+        """Test that multiple occurrences of the same ticker in one post count as one mention"""
         post = Post(
             id='test4',
             subreddit='pennystocks',
@@ -126,13 +126,13 @@ class TestTickerMentionScanner(unittest.TestCase):
             num_comments=self.default_num_comments,
             author_quality=self.default_author_quality
         )
-        
+
         with patch.object(self.scanner, '_get_existing_posts_ids', return_value=set()):
             with patch.object(self.scanner, '_batch_save_posts'):
                 result = self.scanner.process_mentions([post])
-        
+
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].mention_count, 4)
+        self.assertEqual(result[0].mention_count, 1)
 
     # Test 5: Aggregates mentions across multiple posts
     def test_aggregates_mentions_across_posts(self):
@@ -162,10 +162,10 @@ class TestTickerMentionScanner(unittest.TestCase):
         aapl_entry = next(dp for dp in result if dp.ticker == 'AAPL')
         nvda_entry = next(dp for dp in result if dp.ticker == 'NVDA')
 
-        # Should aggregate: 1 + 1 + 2 = 4 total AAPL mentions, also 1 NVDA mention
+        # One mention per ticker per post: 3 posts mention AAPL = 3, 1 post mentions NVDA = 1
         self.assertEqual(aapl_entry.ticker, 'AAPL')
-        self.assertEqual(aapl_entry.mention_count, 4)
-        self.assertEqual(nvda_entry.mention_count, 1) 
+        self.assertEqual(aapl_entry.mention_count, 3)
+        self.assertEqual(nvda_entry.mention_count, 1)
 
     # Test 6: Handles different subreddits separately
     def test_separates_mentions_by_subreddit(self):
@@ -193,7 +193,7 @@ class TestTickerMentionScanner(unittest.TestCase):
         wsb_entry = next(dp for dp in result if dp.subreddit == 'wallstreetbets')
         
         self.assertEqual(pennystocks_entry.mention_count, 1)
-        self.assertEqual(wsb_entry.mention_count, 2)
+        self.assertEqual(wsb_entry.mention_count, 1)
     
     # Test 7: Skips already processed posts
     def test_skips_existing_posts(self):
