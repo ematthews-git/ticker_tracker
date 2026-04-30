@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 _CASHTAG_RE = re.compile(r"\$([A-Za-z]{1,5})\b")
-_BARE_RE = re.compile(r"\b([A-Za-z]{2,5})\b")
+_BARE_RE = re.compile(r"\b([A-Z]{2,5})\b")
 
 
 class TickerMentionScanner:
