@@ -311,6 +311,35 @@ class TestTickerMentionScanner(unittest.TestCase):
         tickers_found = {dp.ticker for dp in result}
         self.assertEqual(tickers_found, {'AAPL', 'TSLA'})
 
+    def test_lowercase_blacklist_suppresses_common_word(self):
+        """Lowercase common-word collisions (`it`, `are`) are filtered, but the
+        same symbols in uppercase still match."""
+        scanner = TickerMentionScanner({'TSLA', 'IT', 'ARE'}, self.mock_pool)
+
+        # Lowercase `it` and `are` are blacklisted; lowercase `tsla` is not.
+        self.assertEqual(
+            scanner.find_tickers_in_text("buying tsla but it dipped, are you?"),
+            {'TSLA'},
+        )
+        # Uppercase IT / ARE still pass through (intentional ticker references).
+        self.assertEqual(
+            scanner.find_tickers_in_text("IT shops ARE buying"),
+            {'IT', 'ARE'},
+        )
+        # Mixed: lowercase `it` filtered, uppercase `ARE` kept.
+        self.assertEqual(
+            scanner.find_tickers_in_text("ARE you sure it works?"),
+            {'ARE'},
+        )
+
+    def test_uppercase_bare_ticker_still_detected(self):
+        """Regression guard: uppercase bare tickers continue to match."""
+        scanner = TickerMentionScanner({'TSLA'}, self.mock_pool)
+        self.assertEqual(
+            scanner.find_tickers_in_text("TSLA to the moon"),
+            {'TSLA'},
+        )
+
     # Test 10: Buckets mentions by post creation hour, not scanner run time
     def test_buckets_mentions_by_post_creation_hour(self):
         """Test that posts created in different hours produce separate MentionDataPoints

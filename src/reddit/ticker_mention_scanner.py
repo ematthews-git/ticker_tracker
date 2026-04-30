@@ -11,7 +11,45 @@ import logging
 logger = logging.getLogger(__name__)
 
 _CASHTAG_RE = re.compile(r"\$([A-Za-z]{1,5})\b")
-_BARE_RE = re.compile(r"\b([A-Z]{2,5})\b")
+_BARE_RE = re.compile(r"\b([A-Za-z]{2,5})\b")
+
+# Common English words that collide with valid US tickers. These are
+# suppressed only when matched in non-uppercase form — the same symbols
+# written in all-caps (e.g. "IT", "SPY", "ARE") are treated as intentional
+# ticker references and pass through unchanged.
+# fmt: off
+_LOWERCASE_TICKER_BLACKLIST: frozenset[str] = frozenset({
+    "AM", "AN", "AS", "AT", "BE", "BY", "DO", "GO", "HE", "HI", "IF", "IN",
+    "IS", "IT", "ME", "MY", "NO", "OF", "ON", "OR", "SO", "TO", "UP", "US",
+    "WE",
+    "ALL", "AND", "ANY", "ARE", "BIG", "BUT", "BUY", "CAN", "FOR", "GET",
+    "HAS", "HAD", "HER", "HIM", "HIS", "HOW", "ITS", "NEW", "NOT", "NOW",
+    "OFF", "ONE", "OUR", "OUT", "OWN", "SEE", "SHE", "THE", "TOO", "TWO",
+    "USE", "WAS", "WAY", "WHO", "WHY", "YES", "YET", "YOU",
+    "ABLE", "ALSO", "AREA", "AWAY", "BACK", "BEEN", "BEST", "BOTH",
+    "CALL", "CAME", "CASH", "COST", "DEAL", "DOES", "DONE", "DOWN",
+    "EACH", "EASY", "EDIT", "ELSE", "EVEN", "EVER", "FACT", "FAIR",
+    "FAST", "FEEL", "FELL", "FELT", "FEW", "FIND", "FINE", "FIRM",
+    "FORM", "FREE", "FROM", "FULL", "FUND", "GAIN", "GAVE", "GIVE",
+    "GOES", "GOOD", "GROW", "HALF", "HARD", "HAVE", "HEAD", "HEAR",
+    "HELD", "HELP", "HERE", "HIGH", "HOLD", "HOME", "HOPE", "HOUR",
+    "HUGE", "INTO", "ITEM", "JUST", "KEEP", "KEPT", "KIND", "KNEW",
+    "KNOW", "LAST", "LATE", "LEAD", "LESS", "LIFE", "LIKE", "LINE",
+    "LIST", "LIVE", "LONG", "LOOK", "LOSE", "LOSS", "LOST", "LOVE",
+    "MADE", "MAIN", "MAKE", "MANY", "MEAN", "MORE", "MOST", "MOVE",
+    "MUCH", "MUST", "NAME", "NEAR", "NEED", "NEXT", "NICE", "NONE",
+    "ONCE", "ONLY", "OPEN", "OVER", "PAID", "PART", "PAST", "PICK",
+    "PLAN", "POOR", "POST", "PUMP", "PUSH", "RATE", "READ", "REAL",
+    "RICH", "RISE", "RISK", "ROLE", "RULE", "SAFE", "SAID", "SAME",
+    "SAVE", "SEEM", "SEEN", "SELF", "SELL", "SEND", "SENT", "SHOW",
+    "SIDE", "SIZE", "SOME", "SOON", "STAY", "STEP", "STOP", "SUCH",
+    "SURE", "TAKE", "TALK", "TEAM", "TELL", "THAN", "THAT", "THEM",
+    "THEN", "THEY", "THIS", "THUS", "TIME", "TOLD", "TOOK", "TRUE",
+    "TURN", "USED", "USER", "VERY", "VIEW", "WAIT", "WALK", "WANT",
+    "WEEK", "WELL", "WENT", "WERE", "WHAT", "WHEN", "WILL", "WISH",
+    "WITH", "WORD", "WORK", "YEAR", "YOUR",
+})
+# fmt: on
 
 
 class TickerMentionScanner:
@@ -182,12 +220,20 @@ class TickerMentionScanner:
     def find_tickers_in_text(self, text: str) -> set[str]:
         """Return the set of valid tickers (uppercase) found in `text`.
 
-        Matches both `$tsla` cashtags and bare `TSLA`/`tsla`/`Tsla`. Lookup against
-        the valid-ticker set is the only source of truth.
+        Cashtags (`$tsla`) and uppercase bare words (`TSLA`) match unconditionally.
+        Lowercase words are filtered through a blacklist of common english words.
         """
         cashtagged = {m.group(1).upper() for m in _CASHTAG_RE.finditer(text)}
-        bare = {m.group(1).upper() for m in _BARE_RE.finditer(text)}
-        return (cashtagged | bare) & self.valid
+        bare_upper: set[str] = set()
+        bare_other: set[str] = set()
+        for m in _BARE_RE.finditer(text):
+            word = m.group(1)
+            if word.isupper():
+                bare_upper.add(word)
+            else:
+                bare_other.add(word.upper())
+        bare_other -= _LOWERCASE_TICKER_BLACKLIST
+        return (cashtagged | bare_upper | bare_other) & self.valid
 
     def _batch_save_post_mentions(self, rows: list[tuple]) -> None:
         """Persist (post_id, ticker) rows so the rollup can be re-derived later."""
