@@ -57,7 +57,7 @@ class TestCollectData(unittest.TestCase):
         """One RedditClient is created per subreddit, each fetching posts."""
         # Make fetch_recent_posts return a fresh iterator on each call
         self.mock_reddit_class.return_value.fetch_recent_posts.side_effect = (
-            lambda sub, limit: ([self.mock_post_a], [], [])
+            lambda sub, limit, **kwargs: ([self.mock_post_a], [], [])
         )
 
         app.collect_data()
@@ -78,7 +78,7 @@ class TestCollectData(unittest.TestCase):
 
         # Each call returns fresh MagicMock posts with unique IDs so deduplication
         # doesn't collapse them into fewer entries than expected.
-        def make_unique_posts(sub, limit):
+        def make_unique_posts(sub, limit, **kwargs):
             posts = [MagicMock(), MagicMock()]
             for i, p in enumerate(posts):
                 p.id = f"{sub}_post_{i}"
@@ -124,7 +124,7 @@ class TestCollectData(unittest.TestCase):
         """An exception in one subreddit thread does not prevent others from completing."""
         call_count = {'n': 0}
 
-        def fetch_side_effect(sub, limit):
+        def fetch_side_effect(sub, limit, **kwargs):
             call_count['n'] += 1
             if call_count['n'] == 1:
                 raise Exception("Network error for first subreddit")
@@ -153,7 +153,7 @@ class TestCollectData(unittest.TestCase):
         from config import CLIENT_ID, CLIENT_SECRET, USER_AGENT
 
         self.mock_reddit_class.return_value.fetch_recent_posts.side_effect = (
-            lambda sub, limit: ([self.mock_post_a], [], [])
+            lambda sub, limit, **kwargs: ([self.mock_post_a], [], [])
         )
 
         app.collect_data()

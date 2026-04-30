@@ -11,6 +11,8 @@ from config import (
     SUBREDDITS,
     COMMENT_LOOKBACK_HOURS,
     COMMENT_POSTS_LIMIT,
+    STREAM_COMMENT_LIMITS,
+    DEFAULT_STREAM_COMMENT_LIMIT,
 )
 import schedule
 from datetime import datetime, timezone
@@ -43,18 +45,35 @@ def collect_data() -> None:
             try:
                 local_reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT, pool)
                 logger.info(f"Fetching posts from r/{subreddit}...")
+                stream_limit = STREAM_COMMENT_LIMITS.get(
+                    subreddit, DEFAULT_STREAM_COMMENT_LIMIT
+                )
                 posts, stream_comments, per_post_comments = (
-                    local_reddit.fetch_recent_posts(subreddit, limit=200)
+                    local_reddit.fetch_recent_posts(
+                        subreddit, limit=200, stream_comment_limit=stream_limit
+                    )
                 )
                 logger.info(
                     f"r/{subreddit}: {len(posts)} posts, "
                     f"{len(stream_comments)} stream comments, "
                     f"{len(per_post_comments)} per-post comments"
                 )
-                return subreddit, posts, stream_comments, per_post_comments
+                return subreddit, posts, stream_comments, per_post_comments, None
             except Exception as e:
-                logger.error(f"Error processing r/{subreddit}: {e}")
-                return subreddit, [], [], []
+                logger.error(
+                    f"SUBREDDIT_FETCH_FAILED sub={subreddit} err={type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                return (
+                    subreddit,
+                    [],
+                    [],
+                    [],
+                    {
+                        "error_type": type(e).__name__,
+                        "error": repr(e),
+                    },
+                )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             # holds each future process and subreddit
@@ -65,7 +84,7 @@ def collect_data() -> None:
             for future in concurrent.futures.as_completed(future_to_sub):
                 sub = future_to_sub[future]
                 try:
-                    subreddit, posts, stream_comments, per_post_comments = (
+                    subreddit, posts, stream_comments, per_post_comments, error = (
                         future.result()
                     )
 
@@ -87,6 +106,8 @@ def collect_data() -> None:
                         "new_stream_comments": new_stream,
                         "new_per_post_comments": new_per_post,
                     }
+                    if error:
+                        subreddit_stats[subreddit].update(error)
 
                     all_posts.extend(posts + stream_comments + per_post_comments)
                 except Exception as e:

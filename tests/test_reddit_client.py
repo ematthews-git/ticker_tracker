@@ -120,19 +120,15 @@ class TestRedditClient(unittest.TestCase):
         self.assertEqual(len(stream_comments), 0)
         self.assertEqual(len(per_post_comments), 1)
         self.assertEqual(per_post_comments[0].id, "ppc1")
-        mock_post.comments.replace_more.assert_called_once_with(limit=0)
+        mock_post.comments.replace_more.assert_called_once_with(limit=5, threshold=10)
 
     def test_fetch_recent_posts_api_error(self):
-        """Test graceful handling of API errors — returns empty tuple"""
+        """API errors propagate so callers can record the failure (used to be silently swallowed)."""
         self.mock_reddit_instance.subreddit.side_effect = Exception("API Error")
 
-        posts, stream_comments, per_post_comments = self.client.fetch_recent_posts(
-            "test_sub"
-        )
-
-        self.assertEqual(posts, [])
-        self.assertEqual(stream_comments, [])
-        self.assertEqual(per_post_comments, [])
+        with self.assertRaises(Exception) as ctx:
+            self.client.fetch_recent_posts("test_sub")
+        self.assertIn("API Error", str(ctx.exception))
 
 
 if __name__ == "__main__":

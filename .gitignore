@@ -21,3 +21,4 @@ logs/
 bin/
 
 ticker_failures.json
+backfill_mentions.py

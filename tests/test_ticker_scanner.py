@@ -20,10 +20,15 @@ class TestTickerMentionScanner(unittest.TestCase):
         self.default_score = 0
         self.default_num_comments = 0
         self.default_author_quality = None
-    
+
+        # Stub the post_mentions writer for every test — psycopg2.extras.execute_batch
+        # can't run against a MagicMock cursor.
+        self._save_pm_patcher = patch.object(self.scanner, '_batch_save_post_mentions')
+        self._save_pm_patcher.start()
+
     def tearDown(self) -> None:
         """Runs after each test to before cleanup"""
-        pass
+        self._save_pm_patcher.stop()
 
     #Test 1: Ticker detection from post
     def test_finds_single_ticker(self):
@@ -233,9 +238,9 @@ class TestTickerMentionScanner(unittest.TestCase):
         
         self.assertEqual(len(result), 0)
     
-    # Test 9: Ignores tickers in lowercase text
-    def test_ignores_lowercase_tickers(self):
-        """Test that lowercase text is not detected as tickers"""
+    # Test 9: Lowercase ticker mentions are now matched (inverted from prior behaviour).
+    def test_finds_lowercase_tickers(self):
+        """Lowercase / mixed-case ticker text is detected and uppercased."""
         post = Post(
             id='test9',
             subreddit='pennystocks',
@@ -250,14 +255,61 @@ class TestTickerMentionScanner(unittest.TestCase):
             num_comments=self.default_num_comments,
             author_quality=self.default_author_quality
         )
-        
-        with patch.object(self.scanner, '_get_existing_posts_ids', return_value=set()):
-            with patch.object(self.scanner, '_batch_save_posts'):
+
+        with patch.object(self.scanner, '_batch_save_posts'):
+            with patch.object(self.scanner, '_batch_save_post_mentions'):
                 result = self.scanner.process_mentions([post])
-        
-        # Should only find TSLA
+
+        tickers_found = {dp.ticker for dp in result}
+        self.assertEqual(tickers_found, {'AAPL', 'TSLA'})
+
+    def test_finds_cashtag_lowercase(self):
+        """`$tsla` (lowercase, with cashtag) maps to TSLA."""
+        post = Post(
+            id='test9b',
+            subreddit='pennystocks',
+            type='post',
+            text='loading up on $tsla calls',
+            link_flair_text=None,
+            created_utc=self.test_timestamp.timestamp(),
+            origin_id=None,
+            user_id=self.default_user_id,
+            score=self.default_score,
+            upvote_ratio=1.0,
+            num_comments=self.default_num_comments,
+            author_quality=self.default_author_quality,
+        )
+
+        with patch.object(self.scanner, '_batch_save_posts'):
+            with patch.object(self.scanner, '_batch_save_post_mentions'):
+                result = self.scanner.process_mentions([post])
+
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].ticker, 'TSLA')
+
+    def test_finds_mixed_case(self):
+        """Mixed-case bare tickers (e.g. `Aapl`) are detected."""
+        post = Post(
+            id='test9c',
+            subreddit='pennystocks',
+            type='post',
+            text='Aapl earnings tomorrow, Tsla too',
+            link_flair_text=None,
+            created_utc=self.test_timestamp.timestamp(),
+            origin_id=None,
+            user_id=self.default_user_id,
+            score=self.default_score,
+            upvote_ratio=1.0,
+            num_comments=self.default_num_comments,
+            author_quality=self.default_author_quality,
+        )
+
+        with patch.object(self.scanner, '_batch_save_posts'):
+            with patch.object(self.scanner, '_batch_save_post_mentions'):
+                result = self.scanner.process_mentions([post])
+
+        tickers_found = {dp.ticker for dp in result}
+        self.assertEqual(tickers_found, {'AAPL', 'TSLA'})
 
     # Test 10: Buckets mentions by post creation hour, not scanner run time
     def test_buckets_mentions_by_post_creation_hour(self):
