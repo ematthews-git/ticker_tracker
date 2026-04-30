@@ -38,6 +38,22 @@ class MentionAnalyser:
             sentiment *= _DOWNVOTE_DAMPEN_FACTOR
         return sentiment
 
+    def qualifying_sentiments(self, posts: list[Post], ticker: str) -> list[float]:
+        """Return effective sentiments for posts that mention `ticker` and pass the
+        length filter. Exposed so the scanner can derive sentiment_sum / post_count
+        without re-running this loop.
+        """
+        sentiments = []
+        for post in posts:
+            if ticker.upper() not in post.text.upper():
+                continue
+            # Skip ticker-only / near-empty posts — they produce 0.0 scores
+            # that drag the mean toward neutral without carrying signal.
+            if len(post.text.strip()) < _MIN_POST_LENGTH:
+                continue
+            sentiments.append(self._effective_sentiment(post))
+        return sentiments
+
     def analyse_ticker_sentiment(
         self, posts: list[Post], ticker: str
     ) -> dict[str, float]:
@@ -50,17 +66,7 @@ class MentionAnalyser:
         Returns:
             dict[str, float]: Holds keys 'avg_sentiment', 'positive_ratio', 'negative_ratio'
         """
-        sentiments = []
-
-        for post in posts:
-            # check that ticker is mentioned
-            if ticker.upper() not in post.text.upper():
-                continue
-            # Skip ticker-only / near-empty posts — they produce 0.0 scores
-            # that drag the mean toward neutral without carrying signal.
-            if len(post.text.strip()) < _MIN_POST_LENGTH:
-                continue
-            sentiments.append(self._effective_sentiment(post))
+        sentiments = self.qualifying_sentiments(posts, ticker)
 
         if not sentiments:
             return {"avg_sentiment": 0.0, "positive_ratio": 0.0, "negative_ratio": 0.0}

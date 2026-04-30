@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Optional
 from datetime import datetime, timezone
 from enum import Enum
@@ -82,11 +82,16 @@ class MentionDataPoint:
         ticker (str): The stock ticker symbol (e.g., 'AAPL').
         subreddit (str): The subreddit where the mention occurred.
         timestamp (datetime): The timestamp when the mention was recorded.
-        mention_count (int): The number of times the ticker was mentioned.
+        mention_count (int): The number of posts mentioning the ticker (deduped per post).
         unique_users (int): Number of unique users mentioning the ticker.
         total_score (int): Sum of scores from all posts mentioning the ticker.
         total_comments (int): Sum of comments from all posts mentioning the ticker.
-        avg_sentiment (float): Average sentiment score (-1 to 1)
+        avg_sentiment (float): Average sentiment score (-1 to 1).
+        sentiment_sum (float): Sum of effective sentiments across qualifying posts;
+            divided by post_count yields a weighted-correct avg_sentiment when buckets merge.
+        post_count (int): Number of posts that contributed to sentiment_sum.
+        user_ids (frozenset[str]): Set of user_ids in this MDP. Persisted to mention_users
+            so unique_users stays correct across :00 / :30 upserts on the same hour bucket.
     """
 
     ticker: str
@@ -97,6 +102,9 @@ class MentionDataPoint:
     total_score: int
     total_comments: int
     avg_sentiment: float
+    sentiment_sum: float = 0.0
+    post_count: int = 0
+    user_ids: frozenset = field(default_factory=frozenset)
 
 
 @dataclass

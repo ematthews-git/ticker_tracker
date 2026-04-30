@@ -1,6 +1,4 @@
 import re
-import sqlite3
-import psycopg2
 from psycopg2.extras import execute_batch
 from datetime import datetime, timezone
 
@@ -11,6 +9,9 @@ from analysis.mention_analyser import MentionAnalyser
 import logging
 
 logger = logging.getLogger(__name__)
+
+_CASHTAG_RE = re.compile(r"\$([A-Za-z]{1,5})\b")
+_BARE_RE = re.compile(r"\b([A-Za-z]{2,5})\b")
 
 
 class TickerMentionScanner:
@@ -45,7 +46,9 @@ class TickerMentionScanner:
                 """
                 INSERT INTO posts (post_id, subreddit, created_utc, text, link_flair_text, type, origin_id, user_id, score, upvote_ratio, num_comments, author_quality)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (post_id) DO NOTHING
+                ON CONFLICT (post_id) DO UPDATE SET
+                    num_comments = GREATEST(posts.num_comments, EXCLUDED.num_comments),
+                    score = EXCLUDED.score
                 """,
                 (
                     post.id,
@@ -92,7 +95,9 @@ class TickerMentionScanner:
                 """
                 INSERT INTO posts (post_id, subreddit, created_utc, text, link_flair_text, type, origin_id, user_id, score, upvote_ratio, num_comments, author_quality)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (post_id) DO NOTHING
+                ON CONFLICT (post_id) DO UPDATE SET
+                    num_comments = GREATEST(posts.num_comments, EXCLUDED.num_comments),
+                    score = EXCLUDED.score
                 """,
                 posts_data,
             )
@@ -174,6 +179,42 @@ class TickerMentionScanner:
 
         return tuples
 
+    def find_tickers_in_text(self, text: str) -> set[str]:
+        """Return the set of valid tickers (uppercase) found in `text`.
+
+        Matches both `$tsla` cashtags and bare `TSLA`/`tsla`/`Tsla`. Lookup against
+        the valid-ticker set is the only source of truth.
+        """
+        cashtagged = {m.group(1).upper() for m in _CASHTAG_RE.finditer(text)}
+        bare = {m.group(1).upper() for m in _BARE_RE.finditer(text)}
+        return (cashtagged | bare) & self.valid
+
+    def _batch_save_post_mentions(self, rows: list[tuple]) -> None:
+        """Persist (post_id, ticker) rows so the rollup can be re-derived later."""
+        if not rows or not self.connection_pool:
+            return
+
+        conn = self.connection_pool.getconn()
+        cursor = conn.cursor()
+        try:
+            execute_batch(
+                cursor,
+                """
+                INSERT INTO post_mentions (post_id, ticker)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                rows,
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error batch saving post_mentions: {e}")
+            raise
+        finally:
+            cursor.close()
+            self.connection_pool.putconn(conn)
+
     # Counts mentions of valid tickers into list of MentionDataPoint objects
     def process_mentions(self, post_list: list[Post]) -> list[MentionDataPoint]:
         """finds the mention of any valid ticker in the list of text parsed and saves each post to db.
@@ -199,7 +240,8 @@ class TickerMentionScanner:
 
         # Process ticker mentions for new posts only
         # Track detailed metrics per ticker-subreddit-hour combination
-        mention_data = {}  # key: (ticker, subreddit, hour_bucket) -> {count, users, total_score, total_comments}
+        mention_data = {}  # key: (ticker, subreddit, hour_bucket) -> {...}
+        post_mention_rows: list[tuple] = []
 
         posts_with_mentions = 0
         for post in posts_to_process:
@@ -207,16 +249,14 @@ class TickerMentionScanner:
             hour_bucket = datetime.fromtimestamp(
                 post.created_utc, tz=timezone.utc
             ).replace(minute=0, second=0, microsecond=0)
-            # find ticker mentions
-            tickers = re.findall(
-                r"\b[A-Z]{2,5}\b", post.text
-            )  # captal letters + 2 to 5 characters
-            # Deduplicate: count each ticker at most once per post
-            unique_tickers = {t for t in tickers if t in self.valid}
-            post_has_mention = bool(unique_tickers)
+
+            unique_tickers = self.find_tickers_in_text(post.text)
+            if unique_tickers:
+                posts_with_mentions += 1
 
             for t in unique_tickers:
-                key = (t.upper(), post.subreddit, hour_bucket)
+                post_mention_rows.append((post.id, t))
+                key = (t, post.subreddit, hour_bucket)
                 if key not in mention_data:
                     mention_data[key] = {
                         "count": 0,
@@ -231,20 +271,24 @@ class TickerMentionScanner:
                 mention_data[key]["total_comments"] += post.num_comments
                 mention_data[key]["posts"].append(post)
 
-            if post_has_mention:
-                posts_with_mentions += 1
-
         logger.info(
             f"Processed {len(posts_to_process)} new posts, found ticker mentions in {posts_with_mentions} posts"
         )
 
+        # Persist the per-post -> ticker map. Allows rebuilding the rollup
+        # offline if regex/valid_tickers ever changes.
+        if post_mention_rows:
+            self._batch_save_post_mentions(post_mention_rows)
+
         # Convert mention_data dictionary to list of MentionDataPoint objects
         mention_data_points = []
         for (ticker, subreddit, hour_bucket), data in mention_data.items():
-            sentiment = self.mention_analyser.analyse_ticker_sentiment(
+            sentiments = self.mention_analyser.qualifying_sentiments(
                 data["posts"], ticker
             )
-            avg_sentiment = sentiment["avg_sentiment"]
+            sentiment_sum = sum(sentiments)
+            post_count = len(sentiments)
+            avg_sentiment = (sentiment_sum / post_count) if post_count else 0.0
 
             mention_data_points.append(
                 MentionDataPoint(
@@ -255,7 +299,10 @@ class TickerMentionScanner:
                     unique_users=len(data["users"]),
                     total_score=data["total_score"],
                     total_comments=data["total_comments"],
-                    avg_sentiment=avg_sentiment,
+                    avg_sentiment=round(avg_sentiment, 4),
+                    sentiment_sum=sentiment_sum,
+                    post_count=post_count,
+                    user_ids=frozenset(data["users"]),
                 )
             )
         return mention_data_points

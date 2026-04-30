@@ -43,26 +43,54 @@ class TestInsertMentionCounts(TestDatabase):
     def test_inserts_single_mention(self, mock_execute_batch):
         mock_pool, mock_conn, mock_cursor = self._make_mock_pool()
 
-        insert_mention_counts(mock_pool, [self.sample_data_point])
+        # Sample MDP with explicit user_ids so both execute_batch calls fire.
+        mdp = MentionDataPoint(
+            ticker="AAPL",
+            subreddit="pennystocks",
+            timestamp=self.test_timestamp,
+            mention_count=10,
+            unique_users=2,
+            total_score=100,
+            total_comments=20,
+            avg_sentiment=0.5,
+            sentiment_sum=1.5,
+            post_count=3,
+            user_ids=frozenset({"u1", "u2"}),
+        )
+
+        insert_mention_counts(mock_pool, [mdp])
 
         mock_pool.getconn.assert_called_once()
-        mock_execute_batch.assert_called_once()
-        call_args = mock_execute_batch.call_args
+        # First call: mention_users dedupe; second: mentions rollup upsert.
+        self.assertEqual(mock_execute_batch.call_count, 2)
 
-        self.assertEqual(call_args[0][0], mock_cursor)
-        self.assertIn("INSERT INTO mentions", call_args[0][1])
-        self.assertIn("ON CONFLICT", call_args[0][1])
+        users_call = mock_execute_batch.call_args_list[0]
+        self.assertIn("INSERT INTO mention_users", users_call[0][1])
+        self.assertIn("ON CONFLICT DO NOTHING", users_call[0][1])
+        user_rows = users_call[0][2]
+        self.assertEqual({r[3] for r in user_rows}, {"u1", "u2"})
+        for row in user_rows:
+            self.assertEqual(row[0], "AAPL")
+            self.assertEqual(row[1], "pennystocks")
+            self.assertEqual(row[2], self.test_timestamp)
 
-        data = call_args[0][2]
+        mentions_call = mock_execute_batch.call_args_list[1]
+        self.assertIn("INSERT INTO mentions", mentions_call[0][1])
+        self.assertIn("ON CONFLICT", mentions_call[0][1])
+
+        data = mentions_call[0][2]
         self.assertEqual(len(data), 1)
+        # New tuple ordering: ticker, subreddit, timestamp, mention_count,
+        # total_score, total_comments, sentiment_sum, post_count, unique_users.
         self.assertEqual(data[0][0], "AAPL")
         self.assertEqual(data[0][1], "pennystocks")
         self.assertEqual(data[0][2], self.test_timestamp)
         self.assertEqual(data[0][3], 10)
-        self.assertEqual(data[0][4], 5)
-        self.assertEqual(data[0][5], 100)
-        self.assertEqual(data[0][6], 20)
-        self.assertEqual(data[0][7], 0.5)
+        self.assertEqual(data[0][4], 100)
+        self.assertEqual(data[0][5], 20)
+        self.assertEqual(data[0][6], 1.5)
+        self.assertEqual(data[0][7], 3)
+        self.assertEqual(data[0][8], 2)
 
         mock_conn.commit.assert_called_once()
         mock_cursor.close.assert_called_once()
@@ -88,6 +116,9 @@ class TestInsertMentionCounts(TestDatabase):
 
         insert_mention_counts(mock_pool, data_points)
 
+        # Both MDPs have empty user_ids (default), so only the mentions
+        # upsert fires, not the mention_users batch.
+        self.assertEqual(mock_execute_batch.call_count, 1)
         call_args = mock_execute_batch.call_args
         data = call_args[0][2]
         self.assertEqual(len(data), 2)

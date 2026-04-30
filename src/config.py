@@ -36,6 +36,14 @@ SUBREDDITS = [
 COMMENT_LOOKBACK_HOURS = int(os.getenv("COMMENT_LOOKBACK_HOURS", 6))
 COMMENT_POSTS_LIMIT = int(os.getenv("COMMENT_POSTS_LIMIT", 100))
 
+# Per-subreddit cap for the latest-comments stream. Big subs blow past 200
+# in minutes, so we ask for more there.
+STREAM_COMMENT_LIMITS = {
+    "wallstreetbets": 800,
+    "Daytrading": 400,
+}
+DEFAULT_STREAM_COMMENT_LIMIT = 300
+
 CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
 CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
 USER_AGENT = os.getenv("REDDIT_USER_AGENT")
