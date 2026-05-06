@@ -300,6 +300,9 @@ class TickerMentionScanner:
             if unique_tickers:
                 posts_with_mentions += 1
 
+            text_upper = post.text.upper()
+            text_long_enough = len(post.text.strip()) >= 15
+
             for t in unique_tickers:
                 post_mention_rows.append((post.id, t))
                 key = (t, post.subreddit, hour_bucket)
@@ -309,13 +312,17 @@ class TickerMentionScanner:
                         "users": set(),
                         "total_score": 0,
                         "total_comments": 0,
-                        "posts": [],
+                        "sentiments": [],
                     }
                 mention_data[key]["count"] += 1
                 mention_data[key]["users"].add(post.user_id)
                 mention_data[key]["total_score"] += post.score
                 mention_data[key]["total_comments"] += post.num_comments
-                mention_data[key]["posts"].append(post)
+
+                if text_long_enough and t in text_upper:
+                    mention_data[key]["sentiments"].append(
+                        self.mention_analyser._effective_sentiment(post)
+                    )
 
         logger.info(
             f"Processed {len(posts_to_process)} new posts, found ticker mentions in {posts_with_mentions} posts"
@@ -329,9 +336,7 @@ class TickerMentionScanner:
         # Convert mention_data dictionary to list of MentionDataPoint objects
         mention_data_points = []
         for (ticker, subreddit, hour_bucket), data in mention_data.items():
-            sentiments = self.mention_analyser.qualifying_sentiments(
-                data["posts"], ticker
-            )
+            sentiments = data["sentiments"]
             sentiment_sum = sum(sentiments)
             post_count = len(sentiments)
             avg_sentiment = (sentiment_sum / post_count) if post_count else 0.0

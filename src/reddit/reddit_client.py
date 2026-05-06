@@ -113,31 +113,32 @@ class RedditClient:
 
         sub = self.reddit.subreddit(subreddit)
 
-        # Fetch raw posts and subreddit-wide comment stream
+        # Fetch raw posts, select top posts for comment trees, then convert
+        # and release the PRAW objects as soon as possible.
         raw_posts = list(sub.new(limit=limit))
-        raw_stream_comments = list(sub.comments(limit=stream_comment_limit))
-
-        # Fetch comment trees for the top N most discussed new posts.
-        # replace_more(limit=5, threshold=10) recovers the deep tail of
-        # viral threads without exploding the per-run API budget.
         posts_to_fetch = sorted(
             [p for p in raw_posts if p.num_comments > 0],
             key=lambda p: p.num_comments,
             reverse=True,
         )[:top_posts_for_comments]
+        posts = [self._convert_to_post(p, subreddit) for p in raw_posts]
+        del raw_posts
+
+        raw_stream_comments = list(sub.comments(limit=stream_comment_limit))
+        stream_comments = [
+            self._convert_to_comment(c, subreddit) for c in raw_stream_comments
+        ]
+        del raw_stream_comments
 
         raw_per_post_comments = []
         for post in posts_to_fetch:
             post.comments.replace_more(limit=5, threshold=10)
             raw_per_post_comments.extend(post.comments.list())
-
-        posts = [self._convert_to_post(p, subreddit) for p in raw_posts]
-        stream_comments = [
-            self._convert_to_comment(c, subreddit) for c in raw_stream_comments
-        ]
+        del posts_to_fetch
         per_post_comments = [
             self._convert_to_comment(c, subreddit) for c in raw_per_post_comments
         ]
+        del raw_per_post_comments
 
         logger.debug(
             f"Fetched {len(posts)} posts, {len(stream_comments)} stream comments, "
