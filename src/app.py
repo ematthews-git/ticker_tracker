@@ -1,4 +1,4 @@
-import concurrent.futures
+import gc
 
 from reddit.reddit_client import RedditClient
 from reddit.ticker_mention_scanner import TickerMentionScanner
@@ -11,6 +11,8 @@ from config import (
     SUBREDDITS,
     COMMENT_LOOKBACK_HOURS,
     COMMENT_POSTS_LIMIT,
+    STREAM_COMMENT_LIMITS,
+    DEFAULT_STREAM_COMMENT_LIMIT,
 )
 import schedule
 from datetime import datetime, timezone
@@ -26,7 +28,7 @@ import logging
 configure_logging()
 
 
-pool = SimpleConnectionPool(minconn=1, maxconn=10, dsn=DB_URL)
+pool = SimpleConnectionPool(minconn=1, maxconn=3, dsn=DB_URL)
 
 
 def collect_data() -> None:
@@ -36,89 +38,84 @@ def collect_data() -> None:
 
     try:
         scanner = TickerMentionScanner(VALID, pool)
-        all_posts = []
         subreddit_stats = {}
+        total_mention_data_points = 0
+        total_mentions = 0
+        total_unique_posts = 0
 
-        def process_subreddit(subreddit):
+        for subreddit in SUBREDDITS:
             try:
-                local_reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT, pool)
+                reddit = RedditClient(CLIENT_ID, CLIENT_SECRET, USER_AGENT, pool)
                 logger.info(f"Fetching posts from r/{subreddit}...")
+                stream_limit = STREAM_COMMENT_LIMITS.get(
+                    subreddit, DEFAULT_STREAM_COMMENT_LIMIT
+                )
                 posts, stream_comments, per_post_comments = (
-                    local_reddit.fetch_recent_posts(subreddit, limit=200)
+                    reddit.fetch_recent_posts(
+                        subreddit, limit=200, stream_comment_limit=stream_limit
+                    )
                 )
                 logger.info(
                     f"r/{subreddit}: {len(posts)} posts, "
                     f"{len(stream_comments)} stream comments, "
                     f"{len(per_post_comments)} per-post comments"
                 )
-                return subreddit, posts, stream_comments, per_post_comments
+
+                all_ids = [p.id for p in stream_comments + per_post_comments]
+                existing = (
+                    get_existing_post_ids_batch(pool, all_ids) if all_ids else set()
+                )
+                stream_ids = {c.id for c in stream_comments}
+                new_stream = sum(1 for c in stream_comments if c.id not in existing)
+                new_per_post = sum(
+                    1
+                    for c in per_post_comments
+                    if c.id not in existing and c.id not in stream_ids
+                )
+                subreddit_stats[subreddit] = {
+                    "stream_comments_fetched": len(stream_comments),
+                    "per_post_comments_fetched": len(per_post_comments),
+                    "new_stream_comments": new_stream,
+                    "new_per_post_comments": new_per_post,
+                }
+
+                # Deduplicate by post ID as a comment can appear in both the
+                # subreddit stream and the per-post comment fetch.
+                seen_ids: set[str] = set()
+                unique_posts = []
+                for p in posts + stream_comments + per_post_comments:
+                    if p.id not in seen_ids:
+                        seen_ids.add(p.id)
+                        unique_posts.append(p)
+
+                total_unique_posts += len(unique_posts)
+
+                mention_data_points = scanner.process_mentions(unique_posts)
+                if mention_data_points:
+                    insert_mention_counts(pool, mention_data_points)
+                    mdp_mentions = sum(
+                        mdp.mention_count for mdp in mention_data_points
+                    )
+                    total_mention_data_points += len(mention_data_points)
+                    total_mentions += mdp_mentions
+
             except Exception as e:
-                logger.error(f"Error processing r/{subreddit}: {e}")
-                return subreddit, [], [], []
+                logger.error(
+                    f"SUBREDDIT_FETCH_FAILED sub={subreddit} err={type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                subreddit_stats[subreddit] = {
+                    "error_type": type(e).__name__,
+                    "error": repr(e),
+                }
+            finally:
+                gc.collect()
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            # holds each future process and subreddit
-            future_to_sub = {
-                executor.submit(process_subreddit, sub): sub for sub in SUBREDDITS
-            }
-
-            for future in concurrent.futures.as_completed(future_to_sub):
-                sub = future_to_sub[future]
-                try:
-                    subreddit, posts, stream_comments, per_post_comments = (
-                        future.result()
-                    )
-
-                    # This to evalute the usefulness of features
-                    all_ids = [p.id for p in stream_comments + per_post_comments]
-                    existing = (
-                        get_existing_post_ids_batch(pool, all_ids) if all_ids else set()
-                    )
-                    stream_ids = {c.id for c in stream_comments}
-                    new_stream = sum(1 for c in stream_comments if c.id not in existing)
-                    new_per_post = sum(
-                        1
-                        for c in per_post_comments
-                        if c.id not in existing and c.id not in stream_ids
-                    )
-                    subreddit_stats[subreddit] = {
-                        "stream_comments_fetched": len(stream_comments),
-                        "per_post_comments_fetched": len(per_post_comments),
-                        "new_stream_comments": new_stream,
-                        "new_per_post_comments": new_per_post,
-                    }
-
-                    all_posts.extend(posts + stream_comments + per_post_comments)
-                except Exception as e:
-                    logger.error(f"Exception processing r/{sub}: {e}")
-
-        # Deduplicate by post ID as a comment can appear in both the subreddit stream
-        # and the per-post comment fetch if it's recent and on a top-discussed post.
-        seen_ids: set[str] = set()
-        unique_posts = []
-        for p in all_posts:
-            if p.id not in seen_ids:
-                seen_ids.add(p.id)
-                unique_posts.append(p)
-        duplicates_removed = len(all_posts) - len(unique_posts)
-        if duplicates_removed:
+        if total_mention_data_points:
             logger.info(
-                f"Removed {duplicates_removed} duplicate posts/comments before processing"
-            )
-
-        logger.info(
-            f"Processing {len(unique_posts)} total posts/comments for ticker mentions..."
-        )
-        mention_data_points = scanner.process_mentions(unique_posts)
-        logger.info(
-            f"Completed. Found {len(mention_data_points)} unique ticker-subreddit combinations"
-        )
-
-        if mention_data_points:
-            insert_mention_counts(pool, mention_data_points)
-            total_mentions = sum(mdp.mention_count for mdp in mention_data_points)
-            logger.info(
-                f"Saved {len(mention_data_points)} mention records ({total_mentions} total mentions) to database \n {'=' * 50}"
+                f"Completed. Processed {total_unique_posts} posts/comments, "
+                f"saved {total_mention_data_points} mention records "
+                f"({total_mentions} total mentions) to database \n {'=' * 50}"
             )
         else:
             logger.warning("No ticker mentions found")

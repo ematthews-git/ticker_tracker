@@ -12,6 +12,13 @@ def insert_mention_counts(
 ) -> None:
     """Adds each MentionDataPoint to the database.
 
+    Two-step write: dedupe users via mention_users (PK rejects duplicates across
+    upserts), then upsert the mentions rollup. mention_count / sentiment_sum /
+    post_count / total_score / total_comments are additive — safe because the
+    scanner only emits MDPs for posts that weren't seen before. unique_users is
+    recomputed from mention_users so the same user across :00 and :30 runs in
+    one hour bucket counts once. avg_sentiment is a generated column.
+
     Args:
         connection_pool: The PostgreSQL connection pool.
         mention_data_points (list[MentionDataPoint]): A list of MentionDataPoint objects to insert.
@@ -19,40 +26,72 @@ def insert_mention_counts(
     if not mention_data_points:
         return
 
-    # get connection from pool
     conn = connection_pool.getconn()
     cursor = conn.cursor()
 
     try:
-        # gets a list of every data point to be added, with variables prepared for SQL batch insert
-        data = [
-            (
-                data_point.ticker.upper(),
-                data_point.subreddit,
-                data_point.timestamp,
-                data_point.mention_count,
-                data_point.unique_users,
-                data_point.total_score,
-                data_point.total_comments,
-                data_point.avg_sentiment,
+        user_rows = [
+            (mdp.ticker.upper(), mdp.subreddit, mdp.timestamp, uid)
+            for mdp in mention_data_points
+            for uid in mdp.user_ids
+        ]
+        if user_rows:
+            execute_batch(
+                cursor,
+                """
+                INSERT INTO mention_users (ticker, subreddit, timestamp, user_id)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                user_rows,
             )
-            for data_point in mention_data_points
+
+        mention_rows = [
+            (
+                mdp.ticker.upper(),
+                mdp.subreddit,
+                mdp.timestamp,
+                mdp.mention_count,
+                mdp.total_score,
+                mdp.total_comments,
+                mdp.sentiment_sum,
+                mdp.post_count,
+                len(mdp.user_ids),
+                # avg_sentiment for new-row insert; on conflict the column is
+                # recomputed from the merged sums so this only matters first time.
+                (mdp.sentiment_sum / mdp.post_count) if mdp.post_count else 0.0,
+            )
+            for mdp in mention_data_points
         ]
 
-        # update covers case in which later fetches (esp :30 job) finds mentions from already logged hours
         execute_batch(
             cursor,
             """
-            INSERT INTO mentions (ticker, subreddit, timestamp, mention_count, unique_users, total_score, total_comments, avg_sentiment)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO mentions (
+                ticker, subreddit, timestamp,
+                mention_count, total_score, total_comments,
+                sentiment_sum, post_count, unique_users, avg_sentiment
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (ticker, subreddit, timestamp) DO UPDATE SET
                 mention_count  = mentions.mention_count  + EXCLUDED.mention_count,
-                unique_users   = mentions.unique_users   + EXCLUDED.unique_users,
                 total_score    = mentions.total_score    + EXCLUDED.total_score,
                 total_comments = mentions.total_comments + EXCLUDED.total_comments,
-                avg_sentiment  = (mentions.avg_sentiment + EXCLUDED.avg_sentiment) / 2
+                sentiment_sum  = mentions.sentiment_sum  + EXCLUDED.sentiment_sum,
+                post_count     = mentions.post_count     + EXCLUDED.post_count,
+                avg_sentiment  = CASE
+                    WHEN (mentions.post_count + EXCLUDED.post_count) = 0 THEN 0
+                    ELSE (mentions.sentiment_sum + EXCLUDED.sentiment_sum)
+                         / (mentions.post_count + EXCLUDED.post_count)
+                END,
+                unique_users   = (
+                    SELECT COUNT(*) FROM mention_users
+                    WHERE ticker = EXCLUDED.ticker
+                      AND subreddit = EXCLUDED.subreddit
+                      AND timestamp = EXCLUDED.timestamp
+                )
             """,
-            data,
+            mention_rows,
         )
 
         conn.commit()

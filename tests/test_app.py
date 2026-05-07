@@ -20,6 +20,7 @@ class TestCollectData(unittest.TestCase):
     def setUp(self):
         self.mock_scanner = MagicMock()
         self.mock_data_point = MagicMock()
+        self.mock_data_point.mention_count = 1
 
         # Default scanner behaviour: returns one mention data point
         self.mock_scanner.process_mentions.return_value = [self.mock_data_point]
@@ -55,30 +56,17 @@ class TestCollectData(unittest.TestCase):
 
     def test_fetches_from_all_configured_subreddits(self):
         """One RedditClient is created per subreddit, each fetching posts."""
-        # Make fetch_recent_posts return a fresh iterator on each call
         self.mock_reddit_class.return_value.fetch_recent_posts.side_effect = (
-            lambda sub, limit: ([self.mock_post_a], [], [])
+            lambda sub, limit, **kwargs: ([self.mock_post_a], [], [])
         )
 
         app.collect_data()
 
-        # One RedditClient instance per subreddit
-        self.assertEqual(self.mock_reddit_class.call_count, len(SUBREDDITS))
-        # fetch_recent_posts called once per subreddit
-        total_fetch_calls = sum(
-            inst.fetch_recent_posts.call_count
-            for inst in self.mock_reddit_class.return_value.__class__.instances
-        ) if hasattr(self.mock_reddit_class.return_value.__class__, 'instances') else \
-            self.mock_reddit_class.call_count  # each call creates an instance
         self.assertEqual(self.mock_reddit_class.call_count, len(SUBREDDITS))
 
-    def test_all_posts_aggregated_and_passed_to_scanner(self):
-        """Posts from all subreddits are combined into one list for the scanner."""
-        num_subreddits = len(SUBREDDITS)
-
-        # Each call returns fresh MagicMock posts with unique IDs so deduplication
-        # doesn't collapse them into fewer entries than expected.
-        def make_unique_posts(sub, limit):
+    def test_scanner_called_once_per_subreddit(self):
+        """process_mentions is called once per subreddit with that subreddit's posts."""
+        def make_unique_posts(sub, limit, **kwargs):
             posts = [MagicMock(), MagicMock()]
             for i, p in enumerate(posts):
                 p.id = f"{sub}_post_{i}"
@@ -88,17 +76,23 @@ class TestCollectData(unittest.TestCase):
 
         app.collect_data()
 
-        self.mock_scanner.process_mentions.assert_called_once()
-        all_posts_arg = self.mock_scanner.process_mentions.call_args[0][0]
-        self.assertEqual(len(all_posts_arg), num_subreddits * 2)  # 2 unique posts per subreddit
+        self.assertEqual(
+            self.mock_scanner.process_mentions.call_count, len(SUBREDDITS)
+        )
+        for call_args in self.mock_scanner.process_mentions.call_args_list:
+            posts_arg = call_args[0][0]
+            self.assertEqual(len(posts_arg), 2)
 
     def test_insert_called_when_mentions_found(self):
-        """insert_mention_counts is called with the pool and mention data when found."""
+        """insert_mention_counts is called for each subreddit that has mentions."""
         self.mock_scanner.process_mentions.return_value = [self.mock_data_point]
 
         app.collect_data()
 
-        self.mock_insert.assert_called_once_with(app.pool, [self.mock_data_point])
+        self.assertEqual(self.mock_insert.call_count, len(SUBREDDITS))
+        for call_args in self.mock_insert.call_args_list:
+            self.assertEqual(call_args[0][0], app.pool)
+            self.assertEqual(call_args[0][1], [self.mock_data_point])
 
     def test_insert_not_called_when_no_mentions(self):
         """insert_mention_counts is NOT called when scanner finds no mentions."""
@@ -121,10 +115,10 @@ class TestCollectData(unittest.TestCase):
         )
 
     def test_one_subreddit_failure_does_not_stop_others(self):
-        """An exception in one subreddit thread does not prevent others from completing."""
+        """An exception in one subreddit does not prevent others from completing."""
         call_count = {'n': 0}
 
-        def fetch_side_effect(sub, limit):
+        def fetch_side_effect(sub, limit, **kwargs):
             call_count['n'] += 1
             if call_count['n'] == 1:
                 raise Exception("Network error for first subreddit")
@@ -132,13 +126,12 @@ class TestCollectData(unittest.TestCase):
 
         self.mock_reddit_class.return_value.fetch_recent_posts.side_effect = fetch_side_effect
 
-        # Should not raise, and scanner should still be called with posts
         app.collect_data()
 
-        self.mock_scanner.process_mentions.assert_called_once()
-        # Posts from all succeeding subreddits should be passed
-        posts_arg = self.mock_scanner.process_mentions.call_args[0][0]
-        self.assertGreater(len(posts_arg), 0)
+        # Scanner should still be called for the succeeding subreddits
+        self.assertEqual(
+            self.mock_scanner.process_mentions.call_count, len(SUBREDDITS) - 1
+        )
 
     def test_scanner_created_with_valid_tickers_and_pool(self):
         """TickerMentionScanner is instantiated with VALID tickers and the pool."""
@@ -153,7 +146,7 @@ class TestCollectData(unittest.TestCase):
         from config import CLIENT_ID, CLIENT_SECRET, USER_AGENT
 
         self.mock_reddit_class.return_value.fetch_recent_posts.side_effect = (
-            lambda sub, limit: ([self.mock_post_a], [], [])
+            lambda sub, limit, **kwargs: ([self.mock_post_a], [], [])
         )
 
         app.collect_data()

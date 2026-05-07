@@ -84,62 +84,67 @@ class RedditClient:
         subreddit: str,
         limit: int = 200,
         top_posts_for_comments: int = 20,
+        stream_comment_limit: int = 300,
     ) -> tuple[list, list, list]:
         """Fetches recent posts and comments from a subreddit.
 
         Comments are collected from two sources:
-        - Stream: the 200 most recent subreddit-wide comments.
-        - Per-post: full comment trees for the top `top_posts_for_comments` most-discussed new posts.
+        - Stream: the most recent subreddit-wide comments (up to stream_comment_limit).
+        - Per-post: comment trees for the top `top_posts_for_comments` most-discussed new posts.
 
         Args:
             subreddit (str): Name of subreddit (without r/).
             limit (int): Max number of posts to retrieve. Defaults to 200.
             top_posts_for_comments (int): Number of top posts (by comment count) to fetch
                 full comment trees for. Defaults to 20.
+            stream_comment_limit (int): Max comments to pull from the subreddit-wide stream.
 
         Returns:
             tuple[list[Post], list[Post], list[Post]]: (posts, stream_comments, per_post_comments)
+
+        Raises:
+            Re-raises any exception from PRAW. Callers are responsible for capturing
+            and recording the failure (so the run continues but the failure is visible).
         """
-        try:
-            logger.debug(f"Fetching {limit} recent posts from r/{subreddit}")
+        logger.debug(
+            f"Fetching {limit} recent posts and up to {stream_comment_limit} "
+            f"stream comments from r/{subreddit}"
+        )
 
-            sub = self.reddit.subreddit(subreddit)
+        sub = self.reddit.subreddit(subreddit)
 
-            # Fetch raw posts and subreddit-wide comment stream
-            raw_posts = list(sub.new(limit=limit))
-            raw_stream_comments = list(sub.comments(limit=200))
+        # Fetch raw posts, select top posts for comment trees, then convert
+        # and release the PRAW objects as soon as possible.
+        raw_posts = list(sub.new(limit=limit))
+        posts_to_fetch = sorted(
+            [p for p in raw_posts if p.num_comments > 0],
+            key=lambda p: p.num_comments,
+            reverse=True,
+        )[:top_posts_for_comments]
+        posts = [self._convert_to_post(p, subreddit) for p in raw_posts]
+        del raw_posts
 
-            # Fetch full comment trees for the top N most discussed new posts
-            posts_to_fetch = sorted(
-                [p for p in raw_posts if p.num_comments > 0],
-                key=lambda p: p.num_comments,
-                reverse=True,
-            )[:top_posts_for_comments]
+        raw_stream_comments = list(sub.comments(limit=stream_comment_limit))
+        stream_comments = [
+            self._convert_to_comment(c, subreddit) for c in raw_stream_comments
+        ]
+        del raw_stream_comments
 
-            raw_per_post_comments = []
-            for post in posts_to_fetch:
-                post.comments.replace_more(limit=0)
-                raw_per_post_comments.extend(post.comments.list())
+        raw_per_post_comments = []
+        for post in posts_to_fetch:
+            post.comments.replace_more(limit=5, threshold=10)
+            raw_per_post_comments.extend(post.comments.list())
+        del posts_to_fetch
+        per_post_comments = [
+            self._convert_to_comment(c, subreddit) for c in raw_per_post_comments
+        ]
+        del raw_per_post_comments
 
-            posts = [self._convert_to_post(p, subreddit) for p in raw_posts]
-            stream_comments = [
-                self._convert_to_comment(c, subreddit) for c in raw_stream_comments
-            ]
-            per_post_comments = [
-                self._convert_to_comment(c, subreddit) for c in raw_per_post_comments
-            ]
-
-            logger.debug(
-                f"Fetched {len(posts)} posts, {len(stream_comments)} stream comments, "
-                f"{len(per_post_comments)} per-post comments from r/{subreddit}"
-            )
-            return posts, stream_comments, per_post_comments
-
-        except Exception as e:
-            logger.error(
-                f"Error connecting with subreddit '{subreddit}': {e}", exc_info=True
-            )
-            return [], [], []
+        logger.debug(
+            f"Fetched {len(posts)} posts, {len(stream_comments)} stream comments, "
+            f"{len(per_post_comments)} per-post comments from r/{subreddit}"
+        )
+        return posts, stream_comments, per_post_comments
 
     def fetch_comments_for_posts(
         self, post_ids_and_subreddits: list[tuple[str, str]]
@@ -163,7 +168,7 @@ class RedditClient:
         for post_id, subreddit in post_ids_and_subreddits:
             try:
                 submission = self.reddit.submission(id=post_id)
-                submission.comments.replace_more(limit=0)
+                submission.comments.replace_more(limit=5, threshold=10)
                 for comment in submission.comments.list():
                     raw_comments_with_sub.append((comment, subreddit))
             except Exception as e:
