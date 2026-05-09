@@ -427,11 +427,11 @@ def get_existing_post_ids_batch(connection_pool, post_ids: list[str]) -> set[str
     try:
         cursor.execute(
             """
-            SELECT post_id FROM posts WHERE post_id = ANY(%s)
-        """,
+            SELECT post_id FROM posts
+            WHERE post_id = ANY(SELECT unnest(%s::text[]))
+            """,
             (post_ids,),
         )
-
         return {row[0] for row in cursor.fetchall()}
     except Exception as e:
         logger.error(f"Error checking existing posts batch: {e}")
