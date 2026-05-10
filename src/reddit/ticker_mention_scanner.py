@@ -1,4 +1,6 @@
+import json
 import re
+from pathlib import Path
 from psycopg2.extras import execute_batch
 from datetime import datetime, timezone
 
@@ -13,43 +15,9 @@ logger = logging.getLogger(__name__)
 _CASHTAG_RE = re.compile(r"\$([A-Za-z]{1,5})\b")
 _BARE_RE = re.compile(r"\b([A-Za-z]{2,5})\b")
 
-# Common English words that collide with valid US tickers. These are
-# suppressed only when matched in non-uppercase form — the same symbols
-# written in all-caps (e.g. "IT", "SPY", "ARE") are treated as intentional
-# ticker references and pass through unchanged.
-# fmt: off
-_LOWERCASE_TICKER_BLACKLIST: frozenset[str] = frozenset({
-    "AM", "AN", "AS", "AT", "BE", "BY", "DO", "GO", "HE", "HI", "IF", "IN",
-    "IS", "IT", "ME", "MY", "NO", "OF", "ON", "OR", "SO", "TO", "UP", "US",
-    "WE",
-    "ALL", "AND", "ANY", "ARE", "BIG", "BUT", "BUY", "CAN", "FOR", "GET",
-    "HAS", "HAD", "HER", "HIM", "HIS", "HOW", "ITS", "NEW", "NOT", "NOW",
-    "OFF", "ONE", "OUR", "OUT", "OWN", "SEE", "SHE", "THE", "TOO", "TWO",
-    "USE", "WAS", "WAY", "WHO", "WHY", "YES", "YET", "YOU",
-    "ABLE", "ALSO", "AREA", "AWAY", "BACK", "BEEN", "BEST", "BOTH",
-    "CALL", "CAME", "CASH", "COST", "DEAL", "DOES", "DONE", "DOWN",
-    "EACH", "EASY", "EDIT", "ELSE", "EVEN", "EVER", "FACT", "FAIR",
-    "FAST", "FEEL", "FELL", "FELT", "FEW", "FIND", "FINE", "FIRM",
-    "FORM", "FREE", "FROM", "FULL", "FUND", "GAIN", "GAVE", "GIVE",
-    "GOES", "GOOD", "GROW", "HALF", "HARD", "HAVE", "HEAD", "HEAR",
-    "HELD", "HELP", "HERE", "HIGH", "HOLD", "HOME", "HOPE", "HOUR",
-    "HUGE", "INTO", "ITEM", "JUST", "KEEP", "KEPT", "KIND", "KNEW",
-    "KNOW", "LAST", "LATE", "LEAD", "LESS", "LIFE", "LIKE", "LINE",
-    "LIST", "LIVE", "LONG", "LOOK", "LOSE", "LOSS", "LOST", "LOVE",
-    "MADE", "MAIN", "MAKE", "MANY", "MEAN", "MORE", "MOST", "MOVE",
-    "MUCH", "MUST", "NAME", "NEAR", "NEED", "NEXT", "NICE", "NONE",
-    "ONCE", "ONLY", "OPEN", "OVER", "PAID", "PART", "PAST", "PICK",
-    "PLAN", "POOR", "POST", "PUMP", "PUSH", "RATE", "READ", "REAL",
-    "RICH", "RISE", "RISK", "ROLE", "RULE", "SAFE", "SAID", "SAME",
-    "SAVE", "SEEM", "SEEN", "SELF", "SELL", "SEND", "SENT", "SHOW",
-    "SIDE", "SIZE", "SOME", "SOON", "STAY", "STEP", "STOP", "SUCH",
-    "SURE", "TAKE", "TALK", "TEAM", "TELL", "THAN", "THAT", "THEM",
-    "THEN", "THEY", "THIS", "THUS", "TIME", "TOLD", "TOOK", "TRUE",
-    "TURN", "USED", "USER", "VERY", "VIEW", "WAIT", "WALK", "WANT",
-    "WEEK", "WELL", "WENT", "WERE", "WHAT", "WHEN", "WILL", "WISH",
-    "WITH", "WORD", "WORK", "YEAR", "YOUR",
-})
-# fmt: on
+_BLACKLIST_PATH = Path(__file__).parent / "lowercase_ticker_blacklist.json"
+with open(_BLACKLIST_PATH) as f:
+    _LOWERCASE_TICKER_BLACKLIST: frozenset[str] = frozenset(json.load(f))
 
 
 class TickerMentionScanner:
