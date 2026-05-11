@@ -21,6 +21,23 @@ Useful for tracking which tickers are trending across finance subreddits and spo
 - **Viz**: matplotlib
 - **Scheduling**: schedule
 
+## Pipeline  
+```mermaid
+flowchart LR
+    R[Reddit API]
+    Y[yfinance]
+
+    R --> C[Collector]
+    C --> S[Scanner + Sentiment]
+    S --> DB[(PostgreSQL)]
+
+    Y --> P[Price Fetcher]
+    DB --> P
+    P --> DB
+
+    DB --> V[Streamlit Dashboard]
+```
+
 ## Setup
 
 1. **Clone and install** (from project root):
