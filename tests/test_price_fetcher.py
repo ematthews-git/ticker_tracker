@@ -123,12 +123,6 @@ class TestCollectAndStorePrices(TestPriceCollectorBase):
 
 
 class TestFetchHourlyPrices(TestPriceCollectorBase):
-    def setUp(self):
-        super().setUp()
-        patcher = patch("market.price_fetcher.record_failures")
-        self.mock_record_failures = patcher.start()
-        self.addCleanup(patcher.stop)
-
     def test_empty_list_returns_empty_dict(self):
         with patch("market.price_fetcher.yf") as mock_yf:
             result = self.collector._fetch_hourly_prices([])
