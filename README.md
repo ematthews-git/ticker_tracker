@@ -71,7 +71,7 @@ flowchart LR
 
 4. **Valid tickers**
 
-   A valid_tickers.json file is included in src/. It was last built from SEC data December 2025. The file is mutated automatically if a ticker is detected to be false (see utils/ticker_validator.py).
+   A valid_tickers.json file is included in src/. It was last built from SEC data December 2025.
 
 ## Usage
 

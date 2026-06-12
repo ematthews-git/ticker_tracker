@@ -17,7 +17,6 @@ from config import DB_URL, VALID
 from psycopg2.pool import SimpleConnectionPool
 from psycopg2.extras import execute_batch
 from utils import helper
-from utils.ticker_validator import record_failures
 import pandas as pd
 
 from logging_setup import configure_logging
@@ -158,7 +157,6 @@ class PriceCollector:
             logger.warning(
                 f"Failed to fetch data for {len(failed)} tickers: {failed[:10]}..."
             )
-            record_failures(failed)
 
         logger.info(
             f"Successfully fetched data for {len(results)}/{len(tickers)} tickers"
